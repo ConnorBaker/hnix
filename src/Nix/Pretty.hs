@@ -575,6 +575,6 @@ printNix =
 
     isIdentChar :: Char -> Bool
     isIdentChar c = isAsciiLower c || isAsciiUpper c || isDigit c || c == '_' || c == '\'' || c == '-'
-  phi NVClosure'{}        = "<<lambda>>"
+  phi NVClosure'{}        = "<LAMBDA>"
   phi (NVPath' fp       ) = fromString $ coerce fp
-  phi (NVBuiltin' name _) = "<<builtin " <> varNameText name <> ">>"
+  phi (NVBuiltin' name _) = "<PRIMOP>"

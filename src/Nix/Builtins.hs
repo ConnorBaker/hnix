@@ -56,6 +56,11 @@ import           Data.Text.Read                 ( decimal )
 import qualified Data.Text.Lazy.Builder        as Builder
 import           Data.These                     ( fromThese, These )
 import qualified Data.Time.Clock.POSIX         as Time
+import qualified Data.Time.Calendar            as Time
+import qualified Data.Time.LocalTime           as Time
+import qualified Data.Time.Format              as Time
+import           Text.Printf                    ( printf )
+import           Data.Fixed                     ( Pico )
 import qualified Data.Vector                   as V
 import           NeatInterpolation              ( text )
 import           Nix.Atoms
@@ -740,21 +745,24 @@ matchNix pat str =
     let
       s  = ignoreContext ns
       re = makeRegex p :: Regex
-      mkMatch t =
-        if Text.null t
+      -- mkMatch: convert a capture group to NValue
+      -- offset -1 means the group didn't participate in the match (null)
+      -- offset >= 0 means the group participated, even if empty (returns the text)
+      mkMatch (t, (offset, _len)) =
+        if offset < 0
           then pure NVNull
           else toValue $ mkNixStringWithoutContext t
 
     case matchOnceText re s of
       Just ("", sarr, "") ->
         do
-          let submatches = fst <$> elems sarr
+          let submatches = elems sarr
           (NVList . V.fromList) <$>
             traverse
               mkMatch
               (case submatches of
                  [] -> mempty
-                 [a] -> one a
+                 [_] -> mempty  -- single element means no capture groups, return empty list
                  _:xs -> xs -- return only the matched groups, drop the full string
               )
       _ -> pure NVNull
@@ -2163,15 +2171,64 @@ fromTOMLNix nvtoml = do
     Toml.Text' _ t    -> pure $ mkNVStrWithoutContext t
     Toml.List' _ xs   -> NVList <$> traverse tomlToNValue (V.fromList xs)
     Toml.Table' _ t   -> tableToNValue t
-    -- Date/time types: error (matching Nix behavior without experimental feature)
-    Toml.Day' _ _         -> dateTimeError
-    Toml.TimeOfDay' _ _   -> dateTimeError
-    Toml.LocalTime' _ _   -> dateTimeError
-    Toml.ZonedTime' _ _   -> dateTimeError
+    -- Date/time types: convert to { _type = "timestamp"; value = "..."; }
+    Toml.Day' _ d         -> mkTimestamp $ formatDay d
+    Toml.TimeOfDay' _ t   -> mkTimestamp $ formatTimeOfDay t
+    Toml.LocalTime' _ lt  -> mkTimestamp $ formatLocalTime lt
+    Toml.ZonedTime' _ zt  -> mkTimestamp $ formatZonedTime zt
 
-  dateTimeError :: m a
-  dateTimeError = throwError $ ErrorCall
-    "builtins.fromTOML: date/time values are not supported"
+  mkTimestamp :: Text -> m (NValue t f m)
+  mkTimestamp value = pure $ NVSet mempty $ HM.fromList
+    [ (mkVarName "_type", mkNVStrWithoutContext "timestamp")
+    , (mkVarName "value", mkNVStrWithoutContext value)
+    ]
+
+  formatDay :: Time.Day -> Text
+  formatDay = toText . Time.formatTime Time.defaultTimeLocale "%Y-%m-%d"
+
+  formatTimeOfDay :: Time.TimeOfDay -> Text
+  formatTimeOfDay tod = toText $ formatTimeOfDayWithPrecision tod
+
+  formatLocalTime :: Time.LocalTime -> Text
+  formatLocalTime lt = toText $
+    Time.formatTime Time.defaultTimeLocale "%Y-%m-%d" (Time.localDay lt) <>
+    "T" <> formatTimeOfDayWithPrecision (Time.localTimeOfDay lt)
+
+  formatZonedTime :: Time.ZonedTime -> Text
+  formatZonedTime zt = toText $
+    Time.formatTime Time.defaultTimeLocale "%Y-%m-%d" (Time.localDay (Time.zonedTimeToLocalTime zt)) <>
+    "T" <> formatTimeOfDayWithPrecision (Time.localTimeOfDay (Time.zonedTimeToLocalTime zt)) <>
+    formatTimeZone (Time.zonedTimeZone zt)
+
+  -- Format TimeOfDay with correct precision for fractional seconds
+  formatTimeOfDayWithPrecision :: Time.TimeOfDay -> String
+  formatTimeOfDayWithPrecision (Time.TimeOfDay h m s) =
+    let baseTime = printf "%02d:%02d:%02d" h m (floor s :: Int)
+        frac = s - fromIntegral (floor s :: Int)
+    in if frac == 0
+       then baseTime
+       else baseTime <> formatFractionalSeconds frac
+
+  -- Format fractional seconds, preserving precision and trimming trailing zeros after 9 digits
+  formatFractionalSeconds :: Pico -> String
+  formatFractionalSeconds pico =
+    let -- Convert to nanoseconds (9 decimal places max, as per Nix behavior)
+        nanos = round (pico * 1e9) :: Integer
+        formatted = printf ".%09d" nanos
+        -- Trim trailing zeros but keep at least 3 digits after decimal
+        trimmed = reverse $ dropWhile (== '0') $ reverse formatted
+        minLength = 4  -- ".XXX" minimum
+    in if length trimmed < minLength
+       then take minLength formatted
+       else trimmed
+
+  formatTimeZone :: Time.TimeZone -> String
+  formatTimeZone tz
+    | Time.timeZoneMinutes tz == 0 = "Z"
+    | otherwise =
+        -- Convert "+0000" format to "+00:00" format
+        let s = Time.formatTime Time.defaultTimeLocale "%z" tz
+        in take 3 s <> ":" <> drop 3 s
 
 toJSONNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 toJSONNix = (fmap NVStr . toJSONNixString) <=< demand
@@ -2673,7 +2730,7 @@ builtinsList =
     , add  Normal   "listToAttrs"      listToAttrsNix
     , add2 Normal   "match"            matchNix
     , add2 Normal   "mul"              mulNix
-    , add0 Normal   "nixPath"          nixPathNix
+    , add0 TopLevel "nixPath"          nixPathNix
     , add0 Normal   "null"             (pure NVNull)
     , add2 Normal   "outputOf"         outputOfNix
     , add  Normal   "parseDrvName"     parseDrvNameNix

@@ -60,26 +60,28 @@ newFailingTests = Set.fromList
     "eval-okay-parse-flake-ref"
   , "eval-okay-flake-ref-to-string"
   -- Parser features not yet implemented (dynamic attrs in inherit)
+  -- Requires changing AST: Inherit (Maybe r) [VarName] -> Inherit (Maybe r) [NKeyName r]
   , "eval-okay-dynamic-attrs-3"
   , "eval-okay-inherit-from"
   , "eval-okay-inherit-attr-pos"
-  -- Regex implementation differences
-  , "eval-okay-regex-match2"
   -- Function identity optimization not implemented
+  -- HNix creates new thunks for list/attrset construction, losing identity
   , "eval-okay-equal-function-list-identical"
   , "eval-okay-equal-function-attrset-identical"
-  -- Builtin behavior differences
-  , "eval-okay-tojson"
-  , "eval-okay-search-path"
-  , "eval-okay-print"
-  , "eval-okay-readFileType"
-  , "eval-okay-fromTOML-timestamps"
-  , "eval-okay-getattrpos-functionargs"
-  , "eval-okay-attrs6"
-  -- Symlink handling differences
+  -- Regex matching differences (TDFA vs Nix regex library)
+  -- Differences in how optional/empty capture groups are handled
+  , "eval-okay-regex-match2"
+  -- Builtin behavior differences - requires investigation
+  , "eval-okay-search-path"  -- NIX_PATH environment setup issues
+  , "eval-okay-print"  -- Cycle detection and value representation
+  , "eval-okay-readFileType"  -- Needs symlink test fixtures
+  , "eval-okay-fromTOML-timestamps"  -- Fractional second formatting differences
+  , "eval-okay-getattrpos-functionargs"  -- Position tracking for function args
+  , "eval-okay-attrs6"  -- __overrides handling
+  -- Symlink handling - git doesn't preserve symlinks, need runtime creation
   , "eval-okay-symlink-resolution"
   , "eval-okay-readDir-symlinked-directory"
-  -- Cycle detection differences (HNix shows <cycle> instead of values)
+  -- Cycle detection differences
   , "eval-okay-intersectAttrs"
   -- Environment-specific expected output (paths differ per machine)
   , "eval-okay-path-string-interpolation"

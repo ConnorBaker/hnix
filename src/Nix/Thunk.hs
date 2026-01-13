@@ -102,4 +102,4 @@ instance Exception ThunkLoop
 -- ** Utils
 
 thunkStubText :: Text
-thunkStubText = "<thunk>"
+thunkStubText = "«repeated»"

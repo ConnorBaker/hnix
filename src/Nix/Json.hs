@@ -58,10 +58,19 @@ toJSON = \case
   NVConstant NNull      -> pure   A.Null
   NVStr      ns         -> A.toJSON <$> extractNixString ns
   NVList l -> A.Array <$> traverse intoJson l
-  NVSet _ m ->
-    case lkup "outPath" kmap of
-      Just outPath -> intoJson outPath
-      Nothing      -> A.Object <$> traverse intoJson kmap
+  NVSet pos m ->
+    -- First check for __toString, then outPath, then normal object encoding
+    case HM.lookup (mkVarName "__toString") m of
+      Just toStringFn -> do
+        -- Call __toString with self (the set itself)
+        -- callFunc handles demanding the thunk internally
+        let self = NVSet pos m
+        result <- lift $ callFunc toStringFn self >>= demand
+        toJSON result
+      Nothing ->
+        case lkup "outPath" kmap of
+          Just outPath -> intoJson outPath
+          Nothing      -> A.Object <$> traverse intoJson kmap
    where
 #if MIN_VERSION_aeson(2,0,0)
     lkup = AKM.lookup
