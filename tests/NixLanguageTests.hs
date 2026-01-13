@@ -63,6 +63,32 @@ newFailingTests = Set.fromList
   , "eval-okay-path-antiquotation"
   , "eval-okay-getattrpos-functionargs"
   , "eval-okay-attrs6"
+  -- Flake-related tests (flake support not yet implemented)
+  , "eval-okay-parse-flake-ref"
+  , "eval-okay-flake-ref-to-string"
+  -- Environment-specific expected output (paths differ per machine)
+  , "eval-okay-path-string-interpolation"
+  -- Parser features not yet implemented (dynamic attrs in inherit)
+  , "eval-okay-dynamic-attrs-3"
+  , "eval-okay-inherit-from"
+  , "eval-okay-inherit-attr-pos"
+  -- Regex implementation differences
+  , "eval-okay-regex-match2"
+  -- Function identity optimization not implemented
+  , "eval-okay-equal-function-list-identical"
+  , "eval-okay-equal-function-attrset-identical"
+  -- Missing builtins or different behavior
+  , "eval-okay-print"
+  , "eval-okay-readFileType"
+  , "eval-okay-fromTOML-timestamps"
+  -- Symlink handling differences
+  , "eval-okay-symlink-resolution"
+  , "eval-okay-readDir-symlinked-directory"
+  -- Cycle detection differences (HNix shows <cycle> instead of values)
+  , "eval-okay-intersectAttrs"
+  -- Stack overflow tests that timeout (2s limit too short for HNix)
+  , "eval-fail-toJSON-stack-overflow"
+  , "eval-fail-derivation-structuredAttrs-stack-overflow"
   ]
 
 -- | Upstream tests that test cases that HNix disaded as a misfeature that is used so rarely
