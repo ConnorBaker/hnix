@@ -112,8 +112,12 @@ genTests =
       testsGroupedByTypeThenName :: Map [String] [(Path, [Path])]
       testsGroupedByTypeThenName = groupBy testType $ Map.toList testsGroupedByName
 
+      -- Filter to only include valid test types (excludes helper files like non-eval-*)
+      validTests :: [([String], [(Path, [Path])])]
+      validTests = filter ((`Set.member` validTestTypes) . fst) $ Map.toList testsGroupedByTypeThenName
+
       testTree :: [TestTree]
-      testTree = mkTestGroup <$> Map.toList testsGroupedByTypeThenName
+      testTree = mkTestGroup <$> validTests
 
     pure $
       localOption
@@ -145,6 +149,15 @@ genTests =
   testType :: (Path, b) -> [String]
   testType (fullpath, _files) = coerce (take 2 . splitOn "-") $ takeFileName fullpath
 
+  -- Only include valid test types, filter out helper files like "non-eval-*"
+  validTestTypes :: Set [String]
+  validTestTypes = Set.fromList
+    [ ["parse", "okay"]
+    , ["parse", "fail"]
+    , ["eval", "okay"]
+    , ["eval", "fail"]
+    ]
+
   mkTestGroup :: ([String], [(Path, [Path])]) -> TestTree
   mkTestGroup (tType, tests) =
     testGroup (String.unwords tType) $ mkTestCase <$> tests
@@ -157,11 +170,15 @@ genTests =
             time <- liftIO getCurrentTime
             let opts = defaultOptions time
             case tType of
-              ["parse", "okay"] -> assertParse opts $ the files
+              -- For parse-okay, only use .nix file (ignore .exp files)
+              ["parse", "okay"] -> assertParse opts $ the $ filter isNixFile files
               ["parse", "fail"] -> assertParseFail opts $ the files
               ["eval" , "okay"] -> assertEval opts files
               ["eval" , "fail"] -> assertEvalFail $ the files
               _                 -> fail $ "Unexpected: " <> show tType
+
+    isNixFile :: Path -> Bool
+    isNixFile = (== ".nix") . takeExtension
 
 
 assertParse :: Options -> Path -> Assertion
