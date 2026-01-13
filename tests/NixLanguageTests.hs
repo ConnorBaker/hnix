@@ -56,18 +56,9 @@ groupBy key = Map.fromListWith (<>) . fmap (key &&& pure)
 -- previously passed.
 newFailingTests :: Set String
 newFailingTests = Set.fromList
-  [ "eval-okay-zipAttrsWith"
-  , "eval-okay-tojson"
-  , "eval-okay-search-path"
-  , "eval-okay-sort"
-  , "eval-okay-path-antiquotation"
-  , "eval-okay-getattrpos-functionargs"
-  , "eval-okay-attrs6"
-  -- Flake-related tests (flake support not yet implemented)
-  , "eval-okay-parse-flake-ref"
+  [ -- Flake-related tests (flake support not yet implemented)
+    "eval-okay-parse-flake-ref"
   , "eval-okay-flake-ref-to-string"
-  -- Environment-specific expected output (paths differ per machine)
-  , "eval-okay-path-string-interpolation"
   -- Parser features not yet implemented (dynamic attrs in inherit)
   , "eval-okay-dynamic-attrs-3"
   , "eval-okay-inherit-from"
@@ -77,15 +68,21 @@ newFailingTests = Set.fromList
   -- Function identity optimization not implemented
   , "eval-okay-equal-function-list-identical"
   , "eval-okay-equal-function-attrset-identical"
-  -- Missing builtins or different behavior
+  -- Builtin behavior differences
+  , "eval-okay-tojson"
+  , "eval-okay-search-path"
   , "eval-okay-print"
   , "eval-okay-readFileType"
   , "eval-okay-fromTOML-timestamps"
+  , "eval-okay-getattrpos-functionargs"
+  , "eval-okay-attrs6"
   -- Symlink handling differences
   , "eval-okay-symlink-resolution"
   , "eval-okay-readDir-symlinked-directory"
   -- Cycle detection differences (HNix shows <cycle> instead of values)
   , "eval-okay-intersectAttrs"
+  -- Environment-specific expected output (paths differ per machine)
+  , "eval-okay-path-string-interpolation"
   -- Stack overflow tests that timeout (2s limit too short for HNix)
   , "eval-fail-toJSON-stack-overflow"
   , "eval-fail-derivation-structuredAttrs-stack-overflow"
