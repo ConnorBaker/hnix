@@ -397,7 +397,7 @@ exprFNixDoc = \case
  where
   prettyContainer h f t c =
     handlePresence
-      (simpleExpr (h <> t))
+      (simpleExpr (h <> " " <> t))  -- Empty container: "[ ]" or "{ }"
       (const $ simpleExpr $ group $ nest 2 (h <> line <> vsep (f <$> c)) <> line <> t)
       c
 
@@ -538,7 +538,9 @@ printNix =
   phi :: NValue' t f m Text -> Text
   phi (NVConstant' a ) = atomText a
   phi (NVStr'      ns) = "\"" <> escapeString (ignoreContext ns) <> "\""
-  phi (NVList'     l ) = "[ " <> unwords (V.toList l) <> " ]"
+  phi (NVList'     l ) = case V.toList l of
+    [] -> "[ ]"
+    xs -> "[ " <> unwords xs <> " ]"
   phi (NVSet' _ s) =
     "{ " <>
       fold

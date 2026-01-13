@@ -919,8 +919,15 @@ baseNameOfNix x =
     pure $
       NVStr $
         modifyNixContents
-          (fromString . coerce takeFileName . toString)
+          (fromString . nixBaseNameOf . toString)
           ns
+  where
+    -- Nix strips exactly one trailing slash before getting basename.
+    -- Multiple trailing slashes are left alone (resulting in empty basename).
+    nixBaseNameOf :: String -> String
+    nixBaseNameOf s = case reverse s of
+      '/':c:rest | c /= '/' -> FP.takeFileName (reverse (c:rest))
+      _ -> FP.takeFileName s
 
 bitAndNix
   :: forall e t f m
@@ -1094,9 +1101,28 @@ dirOfNix nvdir =
     dir <- demand nvdir
 
     case dir of
-      NVStr ns -> pure $ NVStr $ modifyNixContents (fromString . coerce takeDirectory . toString) ns
+      NVStr ns -> pure $ NVStr $ modifyNixContents (fromString . nixDirOf . toString) ns
       NVPath path -> pure $ NVPath $ takeDirectory path
       v -> throwError $ ErrorCall $ "dirOf: expected string or path, got " <> show v
+  where
+    -- Nix's dirOf for strings: return everything before the last '/'.
+    -- If no '/' exists, return ".". If result would be empty, return "/".
+    nixDirOf :: String -> String
+    nixDirOf s = case findLastSlash s of
+      Nothing -> "."
+      Just i  -> case take i s of
+        "" -> "/"
+        r  -> r
+    findLastSlash :: String -> Maybe Int
+    findLastSlash s = case reverse s of
+      [] -> Nothing
+      xs -> case length s - 1 - findIndex xs of
+        n | n < 0 -> Nothing
+        n -> Just n
+      where
+        findIndex ('/':_) = 0
+        findIndex (_:rest) = 1 + findIndex rest
+        findIndex [] = length s  -- no slash found
 
 unsafeDiscardStringContextNix
   :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
