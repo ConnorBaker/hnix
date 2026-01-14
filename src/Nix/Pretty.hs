@@ -467,13 +467,16 @@ derivationDoc =
       let mDrv = HM.lookup "drvPath" s >>= valueToText
       pure $
         case mDrv of
-          Just drv -> "<derivation " <> pretty drv <> ">"
-          Nothing -> "<derivation>"
+          Just drv -> "«derivation " <> pretty drv <> "»"
+          Nothing -> "«derivation»"
     _ -> Nothing
  where
   valueToText :: NValue t f m -> Maybe Text
   valueToText = \case
-    NVStr ns -> Just $ ignoreContext ns
+    NVStr ns ->
+      let t = ignoreContext ns
+      -- Filter out thunk stub text (unforced thunks show as stubs)
+      in if t == thunkStubText then Nothing else Just t
     NVPath p -> Just $ toText p
     _ -> Nothing
 
