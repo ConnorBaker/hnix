@@ -105,9 +105,12 @@ import           System.Nix.FileContentAddress  ( FileIngestionMethod(..) )
 import           System.Nix.ContentAddress      ( ContentAddressMethod(..) )
 import qualified Text.Show
 import           Text.Regex.TDFA                ( Regex
-                                                , makeRegex
+                                                , makeRegexOpts
                                                 , matchOnceText
                                                 , matchAllText
+                                                , defaultCompOpt
+                                                , defaultExecOpt
+                                                , CompOption(..)
                                                 )
 import qualified Toml
 
@@ -745,7 +748,9 @@ matchNix pat str =
     -- Relevant issue: https://github.com/NixOS/nix/issues/2547
     let
       s  = ignoreContext ns
-      re = makeRegex p :: Regex
+      -- Use POSIX ERE semantics: . matches newlines, ^/$ match string boundaries only
+      nixCompOpt = defaultCompOpt { multiline = False }
+      re = makeRegexOpts nixCompOpt defaultExecOpt p :: Regex
       -- mkMatch: convert a capture group to NValue
       -- offset -1 means the group didn't participate in the match (null)
       -- offset >= 0 means the group participated, even if empty (returns the text)
@@ -784,7 +789,9 @@ splitNix pat str =
         -- Relevant issue: https://github.com/NixOS/nix/issues/2547
     let
       s = ignoreContext ns
-      regex       = makeRegex p :: Regex
+      -- Use POSIX ERE semantics: . matches newlines, ^/$ match string boundaries only
+      nixCompOpt = defaultCompOpt { multiline = False }
+      regex = makeRegexOpts nixCompOpt defaultExecOpt p :: Regex
       haystack = encodeUtf8 s
 
     pure $ NVList $ V.fromList $ splitMatches 0 (elems <$> matchAllText regex haystack) haystack
