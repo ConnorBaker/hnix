@@ -79,11 +79,9 @@ newFailingTests = Set.fromList
   -- Builtin behavior differences - requires investigation
   , "eval-okay-print"  -- Needs <PRIMOP-APP> for partial builtin application (shows <PRIMOP>)
   , "eval-okay-getattrpos-functionargs"  -- Position tracking for function args
-  -- Symlink handling: canonicalizePath in defaultToAbsolutePath follows symlinks
-  -- This causes readFileType to see the resolved target instead of the symlink
-  , "eval-okay-readFileType"
-  , "eval-okay-symlink-resolution"
-  , "eval-okay-readDir-symlinked-directory"
+  -- Symlink handling - FIXED by using makeAbsolute instead of canonicalizePath
+  -- (was: "eval-okay-readFileType", "eval-okay-symlink-resolution",
+  --       "eval-okay-readDir-symlinked-directory" - now pass)
   -- Cycle detection differences - FIXED by caching normalized values in Normal.hs
   -- (was: "eval-okay-intersectAttrs" - now passes)
   -- Environment-specific expected output (paths differ per machine)

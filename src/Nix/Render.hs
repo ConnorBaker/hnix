@@ -49,6 +49,9 @@ class (MonadFail m, MonadIO m) => MonadFile m where
     doesDirectoryExist :: Path -> m Bool
     default doesDirectoryExist :: (MonadTrans t, MonadFile m', m ~ t m') => Path -> m Bool
     doesDirectoryExist = lift . doesDirectoryExist
+    makeAbsolute :: Path -> m Path
+    default makeAbsolute :: (MonadTrans t, MonadFile m', m ~ t m') => Path -> m Path
+    makeAbsolute = lift . makeAbsolute
     getSymbolicLinkStatus :: Path -> m S.FileStatus
     default getSymbolicLinkStatus :: (MonadTrans t, MonadFile m', m ~ t m') => Path -> m S.FileStatus
     getSymbolicLinkStatus = lift . getSymbolicLinkStatus
@@ -62,6 +65,7 @@ instance MonadFile IO where
   doesPathExist         = coerce S.doesPathExist
   doesFileExist         = coerce S.doesFileExist
   doesDirectoryExist    = coerce S.doesDirectoryExist
+  makeAbsolute          = coerce S.makeAbsolute
   getSymbolicLinkStatus = coerce S.getSymbolicLinkStatus
 
 

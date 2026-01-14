@@ -84,7 +84,7 @@ staticImport pann path =
   do
     mfile <- asks fst
     path'  <- liftIO $ pathToDefaultNixFile path
-    path'' <- liftIO $ pathToDefaultNixFile =<< coerce canonicalizePath
+    path'' <- liftIO $ pathToDefaultNixFile =<< coerce makeAbsolute
       (case mfile of
         Nothing -> path'
         Just f -> takeDirectory f </> path'

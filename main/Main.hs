@@ -191,17 +191,13 @@ main' opts@Options{..} =
     loadLiteralExpression :: Maybe (StdM cfg m ())
     loadLiteralExpression = processExpr @cfg <$> getExpression
 
-    -- | The `--file` argument: read expressions from the files listed in the argument file
+    -- | The `--file` argument: evaluate expression from the specified file
     loadExpressionFromFile :: Maybe (StdM cfg m ())
     loadExpressionFromFile =
-      -- We can start use Text as in the base case, requires changing Path -> Text
-      -- But that is a gradual process:
-      -- https://github.com/haskell-nix/hnix/issues/912
-      (processSeveralFiles . (coerce . toString <$>) . lines <=< liftIO) .
-        (\case
-          "-" -> Text.IO.getContents
-          _fp -> readFile _fp
-        ) <$> getFromFile
+      (\fp -> case fp of
+        "-" -> processExpr @cfg =<< liftIO Text.IO.getContents
+        _   -> let path = coerce fp in handleResult @cfg (pure path) =<< parseNixFileLoc path
+      ) <$> getFromFile
 
   processExpr
     :: forall (cfg :: EvalCfg) m. (StdBase m, KnownEvalCfg cfg)

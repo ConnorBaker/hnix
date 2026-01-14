@@ -85,7 +85,7 @@ defaultToAbsolutePath origPath =
                     val -> throwError $ ErrorCall $ "when resolving relative path, __cur_file is in scope, but is not a path; it is: " <> show val
                 ) =<< demand v
           pure (dir <///> origPathExpanded)
-    fmap removeDotDotIndirections $ canonicalizePath basePath
+    fmap removeDotDotIndirections $ makeAbsolute basePath
 
 expandHomePath :: MonadFile m => Path -> m Path
 expandHomePath (coerce -> ('~' : xs)) = (<> coerce xs) <$> getHomeDirectory
