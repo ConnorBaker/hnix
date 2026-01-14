@@ -2739,7 +2739,7 @@ builtinsList =
     , add  Normal   "listToAttrs"      listToAttrsNix
     , add2 Normal   "match"            matchNix
     , add2 Normal   "mul"              mulNix
-    , add0 TopLevel "nixPath"          nixPathNix
+    , add0 Normal   "nixPath"          nixPathNix
     , add0 Normal   "null"             (pure NVNull)
     , add2 Normal   "outputOf"         outputOfNix
     , add  Normal   "parseDrvName"     parseDrvNameNix
