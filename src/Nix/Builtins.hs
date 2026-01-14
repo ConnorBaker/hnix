@@ -84,6 +84,7 @@ import qualified Nix.Eval                      as Eval
 import           Nix.Frames
 import           Nix.Json
 import           Nix.Normal
+import           Nix.Pretty                     ( printNix )
 import           Nix.Options
 import           Nix.Parser
 import           Nix.Render
@@ -2291,7 +2292,9 @@ traceNix
   -> m (NValue t f m)
 traceNix msg action =
   do
-    traceEffect @t @f @m . toString . ignoreContext =<< fromValue msg
+    -- Normalize the value to handle thunks and cycles, then pretty-print
+    normalized <- normalizeValue msg
+    traceEffect @t @f @m $ toString $ printNix normalized
     pure action
 
 breakNix

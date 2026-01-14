@@ -73,7 +73,7 @@ newFailingTests = Set.fromList
   , "eval-okay-regex-match2"
   -- Builtin behavior differences - requires investigation
   , "eval-okay-search-path"  -- NIX_PATH environment setup issues
-  , "eval-okay-print"  -- Cycle detection and value representation
+  , "eval-okay-print"  -- Needs <PRIMOP-APP> for partial builtin application (shows <PRIMOP>)
   , "eval-okay-readFileType"  -- Needs symlink test fixtures
   , "eval-okay-fromTOML-timestamps"  -- Fractional second formatting differences
   , "eval-okay-getattrpos-functionargs"  -- Position tracking for function args

@@ -99,7 +99,7 @@ normalForm_
 normalForm_ t = void $ normalizeValue t
 
 opaqueVal :: NVConstraint f => NValue t f m
-opaqueVal = mkNVStrWithoutContext "<cycle>"
+opaqueVal = mkNVStrWithoutContext thunkStubText
 
 -- | Detect cycles & stub them.
 stubCycles

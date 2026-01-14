@@ -537,7 +537,11 @@ printNix =
  where
   phi :: NValue' t f m Text -> Text
   phi (NVConstant' a ) = atomText a
-  phi (NVStr'      ns) = "\"" <> escapeString (ignoreContext ns) <> "\""
+  phi (NVStr'      ns) =
+    let s = ignoreContext ns
+    in  if s == thunkStubText
+          then s  -- Don't quote the cycle/thunk stub
+          else "\"" <> escapeString s <> "\""
   phi (NVList'     l ) = case V.toList l of
     [] -> "[ ]"
     xs -> "[ " <> unwords xs <> " ]"
