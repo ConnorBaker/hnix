@@ -2210,18 +2210,24 @@ fromTOMLNix nvtoml = do
        then baseTime
        else baseTime <> formatFractionalSeconds frac
 
-  -- Format fractional seconds, preserving precision and trimming trailing zeros after 9 digits
+  -- Format fractional seconds using Nix's precision tiers:
+  -- - 3 digits for milliseconds (when us and ns digits are zero)
+  -- - 6 digits for microseconds (when ns digits are zero)
+  -- - 9 digits for nanoseconds (otherwise)
   formatFractionalSeconds :: Pico -> String
   formatFractionalSeconds pico =
-    let -- Convert to nanoseconds (9 decimal places max, as per Nix behavior)
+    let -- Convert to nanoseconds (9 decimal places max)
         nanos = round (pico * 1e9) :: Integer
-        formatted = printf ".%09d" nanos
-        -- Trim trailing zeros but keep at least 3 digits after decimal
-        trimmed = reverse $ dropWhile (== '0') $ reverse formatted
-        minLength = 4  -- ".XXX" minimum
-    in if length trimmed < minLength
-       then take minLength formatted
-       else trimmed
+    in case () of
+      _ | nanos `mod` 1000000 == 0 ->
+            -- Millisecond precision: 3 digits
+            printf ".%03d" (nanos `div` 1000000)
+        | nanos `mod` 1000 == 0 ->
+            -- Microsecond precision: 6 digits
+            printf ".%06d" (nanos `div` 1000)
+        | otherwise ->
+            -- Nanosecond precision: 9 digits
+            printf ".%09d" nanos
 
   formatTimeZone :: Time.TimeZone -> String
   formatTimeZone tz

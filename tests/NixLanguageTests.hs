@@ -20,10 +20,15 @@ import           Nix.Pretty
 import           Nix.String
 import           Nix.XML
 import qualified Options.Applicative           as Opts
+import           System.Directory               ( createDirectoryIfMissing
+                                                , doesPathExist
+                                                , removeFile
+                                                )
 import           System.Environment             ( setEnv )
 import           System.FilePath.Glob           ( compile
                                                 , globDir1
                                                 )
+import           System.Posix.Files             ( createSymbolicLink )
 import           Test.Tasty
 import           Test.Tasty.HUnit
 import           TestCommon
@@ -68,17 +73,15 @@ newFailingTests = Set.fromList
   -- HNix creates new thunks for list/attrset construction, losing identity
   , "eval-okay-equal-function-list-identical"
   , "eval-okay-equal-function-attrset-identical"
-  -- Regex matching differences (TDFA vs Nix regex library)
-  -- Differences in how optional/empty capture groups are handled
-  , "eval-okay-regex-match2"
+  -- Regex matching: eval-okay-regex-match2 now passes
+  -- NIX_PATH / __nixPath support not yet fully implemented
+  , "eval-okay-search-path"  -- __nixPath variable not exposed in evaluation environment
   -- Builtin behavior differences - requires investigation
-  , "eval-okay-search-path"  -- NIX_PATH environment setup issues
   , "eval-okay-print"  -- Needs <PRIMOP-APP> for partial builtin application (shows <PRIMOP>)
-  , "eval-okay-readFileType"  -- Needs symlink test fixtures
-  , "eval-okay-fromTOML-timestamps"  -- Fractional second formatting differences
   , "eval-okay-getattrpos-functionargs"  -- Position tracking for function args
-  , "eval-okay-attrs6"  -- __overrides handling
-  -- Symlink handling - git doesn't preserve symlinks, need runtime creation
+  -- Symlink handling: canonicalizePath in defaultToAbsolutePath follows symlinks
+  -- This causes readFileType to see the resolved target instead of the symlink
+  , "eval-okay-readFileType"
   , "eval-okay-symlink-resolution"
   , "eval-okay-readDir-symlinked-directory"
   -- Cycle detection differences - FIXED by caching normalized values in Normal.hs
@@ -100,9 +103,52 @@ deprecatedRareNixQuirkTests = Set.fromList
   , "eval-okay-hash"
   ]
 
+-- | Create symlink fixtures that git doesn't preserve.
+-- These are needed for eval-okay-readFileType, eval-okay-symlink-resolution,
+-- and eval-okay-readDir-symlinked-directory tests.
+ensureSymlinkFixtures :: IO ()
+ensureSymlinkFixtures = do
+  -- readDir symlinks for readFileType and readDir-symlinked-directory tests
+  let readDirPath = nixTestDir <> "readDir/"
+
+  -- linked -> bar (file symlink)
+  createSymlinkIfMissing (readDirPath <> "linked") "bar"
+
+  -- ldir -> foo (directory symlink)
+  createSymlinkIfMissing (readDirPath <> "ldir") "foo"
+
+  -- symlink-resolution test structure
+  -- The test does: import symlink-resolution/foo/overlays/overlay.nix
+  -- where foo is a symlink that points to a real directory with overlays/overlay.nix
+  let symlinkResPath = nixTestDir <> "symlink-resolution/"
+
+  -- Create the real directory structure
+  createDirectoryIfMissing True (symlinkResPath <> "real/overlays")
+  writeFileIfMissing (symlinkResPath <> "real/overlays/overlay.nix") "\"test\""
+
+  -- Create foo as a symlink to real
+  createSymlinkIfMissing (symlinkResPath <> "foo") "real"
+
+ where
+  createSymlinkIfMissing :: FilePath -> FilePath -> IO ()
+  createSymlinkIfMissing link target = do
+    exists <- doesPathExist link
+    if exists
+      then pass  -- already exists (maybe from previous run or manual creation)
+      else createSymbolicLink target link
+
+  writeFileIfMissing :: FilePath -> String -> IO ()
+  writeFileIfMissing path content = do
+    exists <- doesPathExist path
+    if exists
+      then pass
+      else writeFile path content
+
 genTests :: IO TestTree
 genTests =
   do
+    -- Create symlink fixtures that git doesn't preserve
+    ensureSymlinkFixtures
     testFiles <- getTestFiles
     let
       testsGroupedByName :: Map Path [Path]
@@ -226,7 +272,7 @@ assertEval _opts files =
       [".exp-disabled" ]  -> stub
       [".exp", ".flags"]  ->
         do
-          liftIO $ setEnv "NIX_PATH" "lang/dir4:lang/dir5"
+          liftIO $ setEnv "NIX_PATH" "lang/dir3:lang/dir4"
           flags <- read name ".flags"
           let
             flags' :: Text

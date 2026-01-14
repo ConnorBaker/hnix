@@ -325,19 +325,26 @@ evalBinds isRecursive binds =
   applyBindToAdt _ (NamedVar (StaticKey "__overrides" :| []) finalValue pos) =
     do
       (o', p') <- fromValue =<< finalValue
-      -- TODO: Determine correct position handling for __overrides keys
-      -- Currently falls back to the binding position when key position is missing
-      -- __overrides is allowed to overwrite existing keys
-      pure $
-        (\ (k, v) ->
-          ( True  -- allowOverwrite for __overrides
-          , one k
-          , case HM.lookup k p' of
-              Nothing -> pos
-              Just p2 -> p2
-          , demand v
-          )
-        ) <$> HM.toList o'
+      -- __overrides contents are allowed to overwrite existing keys
+      -- Also include __overrides itself as an attribute (Nix preserves it in the final set)
+      let overrideEntries =
+            (\ (k, v) ->
+              ( True  -- allowOverwrite for __overrides contents
+              , one k
+              , case HM.lookup k p' of
+                  Nothing -> pos
+                  Just p2 -> p2
+              , demand v
+              )
+            ) <$> HM.toList o'
+          -- Include __overrides itself (not overwriting, use original position/value)
+          selfEntry =
+            ( False  -- don't allow overwriting __overrides itself
+            , one "__overrides"
+            , pos
+            , finalValue
+            )
+      pure $ selfEntry : overrideEntries
 
   applyBindToAdt _ (NamedVar pathExpr finalValue pos) =
     (\case
