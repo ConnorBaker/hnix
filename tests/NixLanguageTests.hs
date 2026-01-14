@@ -81,8 +81,8 @@ newFailingTests = Set.fromList
   -- Symlink handling - git doesn't preserve symlinks, need runtime creation
   , "eval-okay-symlink-resolution"
   , "eval-okay-readDir-symlinked-directory"
-  -- Cycle detection differences
-  , "eval-okay-intersectAttrs"
+  -- Cycle detection differences - FIXED by caching normalized values in Normal.hs
+  -- (was: "eval-okay-intersectAttrs" - now passes)
   -- Environment-specific expected output (paths differ per machine)
   , "eval-okay-path-string-interpolation"
   -- Stack overflow tests that timeout (2s limit too short for HNix)

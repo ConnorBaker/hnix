@@ -13,6 +13,7 @@ import           Nix.Prelude
 import           Control.Monad.Free        ( Free(..) )
 import           Data.Set                  ( member
                                            , insert
+                                           , delete
                                            )
 import           Nix.Cited
 import           Nix.Frames
@@ -25,6 +26,9 @@ newtype NormalLoop t f m = NormalLoop (NValue t f m)
 instance MonadDataErrorContext t f m => Exception (NormalLoop t f m)
 
 -- | Normalize the value as much as possible, leaving only detected cycles.
+-- Uses a call-stack based approach: we track thunks currently being normalized
+-- to detect cycles, but allow re-normalization of thunks accessed from different
+-- paths (shared references).
 normalizeValue
   :: forall e t m f
    . ( Framed e m
@@ -49,26 +53,24 @@ normalizeValue v = run $ iterNValueM run go (fmap Free . sequenceNValue' run) v
        )
     -> t
     -> ReaderT Int (StateT (Set (ThunkId m)) m) (NValue t f m)
-  go k tnk  = do
-    alreadySeen <- seen tnk
-    if alreadySeen
+  go k tnk = do
+    let tnkid = thunkId tnk
+    inProgress <- lift $ gets $ member tnkid
+    if inProgress
+      -- Currently being processed - this is a true cycle
       then pure $ pure tnk
       else do
+        -- Mark as in-progress
+        lift $ modify $ insert tnkid
         i <- ask
         when (i > maxDepth) $ fail $ "Exceeded maximum normalization depth of " <> show maxDepth <> " levels."
-        (lifted . lifted)
+        -- Force and normalize recursively
+        result <- (lifted . lifted)
           (=<< force tnk)
           (local (+1) . k)
-   where
-    seen :: t -> ReaderT Int (StateT (Set (ThunkId m)) m) Bool
-    seen t =
-      do
-        let tnkid = thunkId t
-        lift $
-          do
-            thunkWasVisited <- gets $ member tnkid
-            when (not thunkWasVisited) $ modify $ insert tnkid
-            pure thunkWasVisited
+        -- Remove from in-progress (allow re-normalization from other paths)
+        lift $ modify $ delete tnkid
+        pure result
 
 -- | Normalize value.
 -- Detect cycles.
