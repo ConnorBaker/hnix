@@ -366,26 +366,30 @@ evalBinds isRecursive binds =
               t
 
   applyBindToAdt scopes (Inherit ms names pos) =
-    pure $ processScope <$> names
+    concat <$> traverse processScope names
    where
     processScope
-      :: VarName
-      -> (Bool, [VarName], NSourcePos, m v)
-    processScope var =
-      ( False  -- allowOverwrite = False for Inherit
-      , one var
-      , pos
-      , do
-          scopeVal <-
-            case ms of
-              Nothing -> withScopes scopes $ lookupVar var
-              Just s -> do
-                (coerce -> scope, _) <- fromValue @(AttrSet v, PositionSet) =<< s
-                clearScopes $ pushScope @v scope $ lookupVar var
-          case scopeVal of
-            Nothing -> attrMissing (one var) Nothing
-            Just v -> demand v
-      )
+      :: NKeyName (m v)
+      -> m [(Bool, [VarName], NSourcePos, m v)]
+    processScope keyName = do
+      mVar <- evalSetterKeyName keyName
+      case mVar of
+        Nothing -> pure []  -- null key (e.g., inherit ${null};) - skip
+        Just var -> pure
+          [( False  -- allowOverwrite = False for Inherit
+           , one var
+           , pos
+           , do
+               scopeVal <-
+                 case ms of
+                   Nothing -> withScopes scopes $ lookupVar var
+                   Just s -> do
+                     (coerce -> scope, _) <- fromValue @(AttrSet v, PositionSet) =<< s
+                     clearScopes $ pushScope @v scope $ lookupVar var
+               case scopeVal of
+                 Nothing -> attrMissing (one var) Nothing
+                 Just v -> demand v
+           )]
 
   moveOverridesLast = uncurry (<>) . partition
     (\case

@@ -277,7 +277,7 @@ mkSynHoleF = NSynHole . mkVarName
 -- |                        |                    | @b = x.b;@ |
 -- +------------------------+--------------------+------------+
 inheritFrom :: e -> [VarName] -> Binding e
-inheritFrom expr ks = Inherit (pure expr) ks nullPos
+inheritFrom expr ks = Inherit (pure expr) (StaticKey <$> ks) nullPos
 
 -- | An `inherit` clause without an expression to pull from.
 --
@@ -288,7 +288,7 @@ inheritFrom expr ks = Inherit (pure expr) ks nullPos
 -- |                      |                | @b = outside.b;@ |
 -- +----------------------+----------------+------------------+
 inherit :: [VarName] -> Binding e
-inherit ks = Inherit Nothing ks nullPos
+inherit ks = Inherit Nothing (StaticKey <$> ks) nullPos
 
 -- | Nix @=@ (bind operator).
 ($=) :: Text -> NExpr -> Binding NExpr

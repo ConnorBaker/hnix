@@ -537,19 +537,21 @@ data Binding r
   -- ^ An explicit naming.
   --
   -- > NamedVar (StaticKey "x" :| [StaticKey "y"]) z NSourcePos{}  ~  x.y = z;
-  | Inherit (Maybe r) [VarName] NSourcePos
+  | Inherit (Maybe r) [NKeyName r] NSourcePos
   -- ^ Inheriting an attribute (binding) into the attribute set from the other scope (attribute set). No denoted scope means to inherit from the closest outside scope.
   --
-  -- +----------------------------------------------------------------+--------------------+-----------------------+
-  -- | Hask                                                           | Nix                | pseudocode            |
-  -- +================================================================+====================+=======================+
-  -- | @Inherit Nothing  [StaticKey "a"] NSourcePos{}@                | @inherit a;@       | @a = outside.a;@      |
-  -- +----------------------------------------------------------------+--------------------+-----------------------+
-  -- | @Inherit (pure x) [StaticKey "a"] NSourcePos{}@                | @inherit (x) a;@   | @a = x.a;@            |
-  -- +----------------------------------------------------------------+--------------------+-----------------------+
-  -- | @Inherit (pure x) [StaticKey "a", StaticKey "b"] NSourcePos{}@ | @inherit (x) a b;@ | @a = x.a;@            |
-  -- |                                                                |                    | @b = x.b;@            |
-  -- +----------------------------------------------------------------+--------------------+-----------------------+
+  -- +-------------------------------------------------------------------------+------------------------+-----------------------+
+  -- | Hask                                                                    | Nix                    | pseudocode            |
+  -- +=========================================================================+========================+=======================+
+  -- | @Inherit Nothing  [StaticKey "a"] NSourcePos{}@                         | @inherit a;@           | @a = outside.a;@      |
+  -- +-------------------------------------------------------------------------+------------------------+-----------------------+
+  -- | @Inherit (pure x) [StaticKey "a"] NSourcePos{}@                         | @inherit (x) a;@       | @a = x.a;@            |
+  -- +-------------------------------------------------------------------------+------------------------+-----------------------+
+  -- | @Inherit (pure x) [StaticKey "a", StaticKey "b"] NSourcePos{}@          | @inherit (x) a b;@     | @a = x.a;@            |
+  -- |                                                                         |                        | @b = x.b;@            |
+  -- +-------------------------------------------------------------------------+------------------------+-----------------------+
+  -- | @Inherit Nothing  [DynamicKey (Antiquoted e)] NSourcePos{}@             | @inherit $\{e};@       | @\<e\> = outside.\<e\>;@ |
+  -- +-------------------------------------------------------------------------+------------------------+-----------------------+
   --
   -- (2021-07-07 use details):
   -- Inherits the position of the first name through @unsafeGetAttrPos@. The position of the scope inherited from else - the position of the first member of the binds list.
@@ -935,17 +937,45 @@ getFreeVars e =
    where
     bind1Def :: Binding r -> Set VarName
     bind1Def (Inherit   Nothing                  _    _) = mempty
-    bind1Def (Inherit  (Just _                 ) keys _) = Set.fromList keys
+    bind1Def (Inherit  (Just _                 ) keys _) = Set.fromList $ mapMaybe extractStatic keys
     bind1Def (NamedVar (StaticKey  varname :| _) _    _) = one varname
     bind1Def (NamedVar (DynamicKey _       :| _) _    _) = mempty
+
+    extractStatic :: NKeyName r -> Maybe VarName
+    extractStatic (StaticKey v)  = Just v
+    extractStatic (DynamicKey _) = Nothing  -- Dynamic keys don't contribute static definitions
 
   bindFreeVars :: Foldable t => t (Binding NExpr) -> Set VarName
   bindFreeVars = foldMap bind1Free
    where
     bind1Free :: Binding NExpr -> Set VarName
-    bind1Free (Inherit  Nothing     keys _) = Set.fromList keys
-    bind1Free (Inherit (Just scope) _    _) = getFreeVars scope
+    bind1Free (Inherit  Nothing     keys _) = Set.unions $ fmap keyFreeVars keys
+    bind1Free (Inherit (Just scope) keys _) = getFreeVars scope <> Set.unions (fmap keyDynFreeVars keys)
     bind1Free (NamedVar path        expr _) = pathFree path <> getFreeVars expr
+
+    -- For inherit without scope: static keys are free vars, dynamic keys contribute their expression's free vars
+    keyFreeVars :: NKeyName NExpr -> Set VarName
+    keyFreeVars (StaticKey v)  = one v
+    keyFreeVars (DynamicKey k) = antiquotedFreeVars k
+
+    -- For inherit with scope: only dynamic keys contribute free vars (static keys come from the scope)
+    keyDynFreeVars :: NKeyName NExpr -> Set VarName
+    keyDynFreeVars (StaticKey _)  = mempty
+    keyDynFreeVars (DynamicKey k) = antiquotedFreeVars k
+
+    antiquotedFreeVars :: Antiquoted (NString NExpr) NExpr -> Set VarName
+    antiquotedFreeVars (Plain s)       = stringFreeVars s
+    antiquotedFreeVars EscapedNewline  = mempty
+    antiquotedFreeVars (Antiquoted e)  = getFreeVars e
+
+    stringFreeVars :: NString NExpr -> Set VarName
+    stringFreeVars (DoubleQuoted xs) = foldMap antiquotedTextFreeVars xs
+    stringFreeVars (Indented _ xs)   = foldMap antiquotedTextFreeVars xs
+
+    antiquotedTextFreeVars :: Antiquoted Text NExpr -> Set VarName
+    antiquotedTextFreeVars (Plain _)       = mempty
+    antiquotedTextFreeVars EscapedNewline  = mempty
+    antiquotedTextFreeVars (Antiquoted e)  = getFreeVars e
 
   pathFree :: NAttrPath NExpr -> Set VarName
   pathFree = foldMap mapFreeVars

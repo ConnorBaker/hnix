@@ -553,14 +553,13 @@ nixBinders = mergeBindings =<< (inherit <|> namedVar) `endBy` symbol ';' where
         liftA2 (Inherit x)
           (many inheritedIdentifier)
           (pure (toNSourcePos p))
-  -- | Parse an identifier for inherit - either a regular identifier or a quoted string
-  -- (for reserved keywords like "or"). Quoted strings must be static (no interpolation).
-  inheritedIdentifier = identifier <|> quotedIdentifier
-  quotedIdentifier = lexeme $ do
-    str <- doubleQuoted
-    case str of
-      DoubleQuoted [Plain t] -> pure $ mkVarName t
-      _ -> fail "dynamic attributes not allowed in inherit"
+  -- | Parse an identifier for inherit - either a regular identifier, a quoted string,
+  -- or a dynamic attribute (${expr}). Uses the same pattern as keyName.
+  inheritedIdentifier :: Parser (NKeyName NExprLoc)
+  inheritedIdentifier = dynamicKey <|> staticKey
+   where
+    staticKey  = StaticKey <$> identifier
+    dynamicKey = DynamicKey <$> nixAntiquoted nixString'
   namedVar =
     do
       p <- getSourcePos

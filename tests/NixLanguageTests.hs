@@ -59,11 +59,11 @@ newFailingTests = Set.fromList
   [ -- Flake-related tests (flake support not yet implemented)
     "eval-okay-parse-flake-ref"
   , "eval-okay-flake-ref-to-string"
-  -- Parser features not yet implemented (dynamic attrs in inherit)
-  -- Requires changing AST: Inherit (Maybe r) [VarName] -> Inherit (Maybe r) [NKeyName r]
-  , "eval-okay-dynamic-attrs-3"
-  , "eval-okay-inherit-from"
-  , "eval-okay-inherit-attr-pos"
+  -- Dynamic attrs in inherit - FIXED by changing Inherit AST type
+  -- (was: "eval-okay-dynamic-attrs-3" - now passes)
+  -- Tests below have other issues beyond dynamic inherit:
+  , "eval-okay-inherit-from"  -- Also requires __overrides handling (see eval-okay-attrs6)
+  , "eval-okay-inherit-attr-pos"  -- Requires per-attribute position tracking in inherit
   -- Function identity optimization not implemented
   -- HNix creates new thunks for list/attrset construction, losing identity
   , "eval-okay-equal-function-list-identical"

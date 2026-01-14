@@ -61,7 +61,7 @@ genBinding = Gen.choice
       genNSourcePos
   , liftA3 Inherit
       (Gen.maybe genExpr)
-      (Gen.list (Range.linear 0 5) asciiVarName)
+      (Gen.list (Range.linear 0 5) genKeyName)
       genNSourcePos
   ]
 
