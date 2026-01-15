@@ -2,6 +2,12 @@ semaphore: true
 jobs: $ncpus
 optimization: 1
 
+-- GHC 9.14 ships with base-4.22, but many packages haven't updated bounds yet
+allow-newer:
+  -- Allow all packages to use newer base (for GHC 9.14 compatibility)
+  *:base,
+  *:template-haskell,
+
 packages:
   .
   ./hnix-store/hnix-store-core
@@ -11,3 +17,11 @@ packages:
   ./hnix-store/hnix-store-readonly
   ./hnix-store/hnix-store-remote
   ./hnix-store/hnix-store-tests
+
+-- GHC 9.14's bundled exceptions-0.10.11 has broken template-haskell-inplace refs.
+-- Force building from Hackage source instead.
+source-repository-package
+  type: git
+  location: https://github.com/ekmett/exceptions.git
+  tag: v0.10.11
+  --sha256: sha256-kabkX239AgEdzcDfQMJQF7gOgZSrv3AqqCMOf0o0thQ=
