@@ -584,4 +584,4 @@ printNix =
     isIdentChar c = isAsciiLower c || isAsciiUpper c || isDigit c || c == '_' || c == '\'' || c == '-'
   phi NVClosure'{}        = "<LAMBDA>"
   phi (NVPath' fp       ) = fromString $ coerce fp
-  phi (NVBuiltin' name _) = "<PRIMOP>"
+  phi (NVBuiltin' _name _) = "<PRIMOP>"

@@ -139,7 +139,7 @@ data NValueF p m r
       -- ^ A builtin function is itself already in normal form. Also, it may
       --   or may not choose to evaluate its argument in the production of a
       --   result.
-  deriving (Generic, Typeable, Functor)
+  deriving (Generic, Functor)
 
 
 -- ** Eq
@@ -293,7 +293,7 @@ newtype NValue' t f m a =
     _nValue :: f (NValueF (NValue t f m) m a)
     -- NOTE: newtypes are always strict, so no bang needed
     }
-  deriving (Generic, Typeable, Functor, Foldable)
+  deriving (Generic, Functor, Foldable)
 
 instance (NVConstraint f, Show a) => Show (NValue' t f m a) where
   show (NValue' (extract -> v)) = show v
@@ -711,7 +711,6 @@ data ValueFrame t f m
   | CoercionToJson (NValue t f m)
   | CoercionFromJson Aeson.Value
   | Expectation ValueType (NValue t f m)
- deriving Typeable
 
 deriving instance (NVConstraint f, Show t) => Show (ValueFrame t f m)
 

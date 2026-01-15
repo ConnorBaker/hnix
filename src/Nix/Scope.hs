@@ -40,7 +40,7 @@ import qualified GHC.Clock                     as Clock
 newtype Scope a = Scope (AttrSet a)
   deriving
     ( Eq, Ord, Generic
-    , Typeable, NFData
+    , NFData
     , Read, Hashable
     , Semigroup, Monoid
     , Functor, Foldable, Traversable

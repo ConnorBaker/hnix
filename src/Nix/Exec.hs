@@ -170,7 +170,7 @@ type MonadNix e t f m =
   )
 
 data ExecFrame t f m = Assertion SrcSpan (NValue t f m)
-  deriving (Show, Typeable)
+  deriving (Show)
 
 instance MonadDataErrorContext t f m => Exception (ExecFrame t f m)
 

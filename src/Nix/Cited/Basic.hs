@@ -32,7 +32,6 @@ import           Nix.Value
 newtype Cited t f m a = Cited (NCited m (NValue t f m) a)
   deriving
     ( Generic
-    , Typeable
     , Functor
     , Applicative
     , Foldable

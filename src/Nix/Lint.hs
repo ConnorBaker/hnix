@@ -121,7 +121,9 @@ unpackSymbolic
   :: (MonadAtomicRef m, MonadThunkId m, MonadCatch m)
   => Symbolic m
   -> m (NSymbolicF (NTypeF m (Symbolic m)))
-unpackSymbolic = readRef . getSV <=< demand
+unpackSymbolic s = demand s >>= \case
+  SV v -> readRef v
+  ST _ -> error "unpackSymbolic: demand returned ST (should be impossible)"
 
 type MonadLint e m =
   ( Scoped (Symbolic m) m

@@ -25,14 +25,14 @@ data Provenance m v =
       --   'contextExpr' will be @(x: x + 2) 3@, preserving not only the
       --   result of the call, but what was called and with what arguments.
     }
-    deriving (Generic, Typeable, Show)
+    deriving (Generic, Show)
 
 data NCited m v a =
   NCited
     { getProvenance :: [Provenance m v]
     , getCited      :: a
     }
-    deriving (Generic, Typeable, Functor, Foldable, Traversable, Show)
+    deriving (Generic, Functor, Foldable, Traversable, Show)
 
 instance Applicative (NCited m v) where
   pure = NCited mempty

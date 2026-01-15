@@ -87,7 +87,7 @@ data EvalFrame m v
   | ForcingExpr (Scopes m v) NExprLoc
   | Calling VarName SrcSpan
   | SynHole (SynHoleInfo m v)
-  deriving (Show, Typeable)
+  deriving (Show)
 
 instance (Typeable m, Typeable v) => Exception (EvalFrame m v)
 
@@ -95,7 +95,7 @@ data SynHoleInfo m v = SynHoleInfo
   { _synHoleInfo_expr :: NExprLoc
   , _synHoleInfo_scope :: Scopes m v
   }
-  deriving (Show, Typeable)
+  deriving (Show)
 
 instance (Typeable m, Typeable v) => Exception (SynHoleInfo m v)
 

@@ -31,7 +31,7 @@ import           Nix.Thunk                      ( MonadThunk(force) )
 import qualified Data.Vector                   as V
 
 newtype Deeper a = Deeper a
-  deriving (Typeable, Functor, Foldable, Traversable)
+  deriving (Functor, Foldable, Traversable)
 
 type CoerceDeeperToNValue t f m = Deeper (NValue t f m) -> NValue t f m
 type CoerceDeeperToNValue' t f m = Deeper (NValue' t f m (NValue t f m)) -> NValue' t f m (NValue t f m)

@@ -79,7 +79,7 @@ newtype StdCited m a =
   StdCited
     (Cited (StdThunk m) (StdCited m) m a)
   deriving
-    ( Generic, Typeable
+    ( Generic
     , Functor, Applicative, Comonad, ComonadEnv [Provenance m (StdValue m)]
     , Foldable, Traversable
     )

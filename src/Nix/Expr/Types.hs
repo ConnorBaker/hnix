@@ -180,7 +180,7 @@ instance FromJSON NSourcePos
 -- ** newtype VarName
 
 newtype VarName = VarName { getVarNameSymbol :: Symbol }
-  deriving stock (Generic, Typeable)
+  deriving stock (Generic)
   deriving newtype (Eq, Ord, NFData, Hashable)
 
 -- | Create a VarName from Text by interning it as a Symbol.
@@ -274,7 +274,7 @@ paramSetToSortedList = sortOn fst . HM.toList
 data Variadic = Closed | Variadic
   deriving
     ( Eq, Ord, Generic
-    , Typeable, Data, NFData, Serialise, Binary, ToJSON, FromJSON
+    , Data, NFData, Serialise, Binary, ToJSON, FromJSON
     , Show, Read, Hashable
     )
 
@@ -303,7 +303,7 @@ data Params r
   -- > ParamSet (pure "s") True  [("x", pure y)]  ~  s@{ x ? y, ... }
   deriving
     ( Eq, Ord, Generic, Generic1
-    , Typeable, Data, NFData, NFData1, Serialise, Binary, ToJSON, ToJSON1, FromJSON, FromJSON1
+    , Data, NFData, NFData1, Serialise, Binary, ToJSON, ToJSON1, FromJSON, FromJSON1
     , Functor, Foldable, Traversable
     , Show, Read, Hashable
     )
@@ -340,7 +340,7 @@ data Antiquoted (v :: Type) (r :: Type)
   | Antiquoted r
   deriving
     ( Eq, Ord, Generic, Generic1
-    , Typeable, Data, NFData, NFData1, Serialise, Binary
+    , Data, NFData, NFData1, Serialise, Binary
     , ToJSON, ToJSON1, FromJSON, FromJSON1
     , Functor, Foldable, Traversable
     , Show, Read, Hashable
@@ -393,7 +393,7 @@ data NString r
   -- >                                             ${y}''
   deriving
     ( Eq, Ord, Generic, Generic1
-    , Typeable, Data, NFData, NFData1, Serialise, Binary, ToJSON, ToJSON1, FromJSON, FromJSON1
+    , Data, NFData, NFData1, Serialise, Binary, ToJSON, ToJSON1, FromJSON, FromJSON1
     , Functor, Foldable, Traversable
     , Show, Read, Hashable
     )
@@ -447,7 +447,7 @@ data NKeyName r
   -- > StaticKey "x"                                     ~  x
   deriving
     ( Eq, Ord, Generic
-    , Typeable, Data, NFData, Serialise, Binary, ToJSON, FromJSON
+    , Data, NFData, Serialise, Binary, ToJSON, FromJSON
     , Show, Read, Hashable
     )
 
@@ -557,7 +557,7 @@ data Binding r
   -- Inherits the position of the first name through @unsafeGetAttrPos@. The position of the scope inherited from else - the position of the first member of the binds list.
   deriving
     ( Eq, Ord, Generic, Generic1
-    , Typeable, Data, NFData, NFData1, Serialise, Binary, ToJSON, FromJSON
+    , Data, NFData, NFData1, Serialise, Binary, ToJSON, FromJSON
     , Functor, Foldable, Traversable
     , Show, Hashable
     )
@@ -583,7 +583,7 @@ data Recursivity
   | Recursive     -- ^ > rec { ... }
   deriving
     ( Eq, Ord, Enum, Bounded, Generic
-    , Typeable, Data, NFData, Serialise, Binary, ToJSON, FromJSON
+    , Data, NFData, Serialise, Binary, ToJSON, FromJSON
     , Show, Read, Hashable
     )
 
@@ -602,7 +602,7 @@ data NUnaryOp
   | NNot  -- ^ @!@
   deriving
     ( Eq, Ord, Enum, Bounded, Generic
-    , Typeable, Data, NFData, Serialise, Binary, ToJSON, FromJSON
+    , Data, NFData, Serialise, Binary, ToJSON, FromJSON
     , Show, Read, Hashable
     )
 
@@ -631,7 +631,7 @@ data NBinaryOp
   | NConcat  -- ^ List concatenation (@++@)
   deriving
     ( Eq, Ord, Enum, Bounded, Generic
-    , Typeable, Data, NFData, Serialise, Binary, ToJSON, FromJSON
+    , Data, NFData, Serialise, Binary, ToJSON, FromJSON
     , Show, Read, Hashable
     )
 
@@ -736,7 +736,7 @@ data NExprF r
   -- > NSynHole "x"                                ~  ^x
   deriving
     ( Eq, Ord, Generic, Generic1
-    , Typeable, Data, NFData, NFData1, Serialise, Binary, ToJSON, FromJSON
+    , Data, NFData, NFData1, Serialise, Binary, ToJSON, FromJSON
     , Functor, Foldable, Traversable
     , Show, Hashable
     )

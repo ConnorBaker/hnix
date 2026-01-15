@@ -47,7 +47,7 @@ data SrcSpan = SrcSpan
   { getSpanBegin :: NSourcePos
   , getSpanEnd   :: NSourcePos
   }
- deriving (Ord, Eq, Generic, Typeable, Data, Show, NFData, Hashable)
+ deriving (Ord, Eq, Generic, Data, Show, NFData, Hashable)
 
 -- ** Instances
 
@@ -75,7 +75,7 @@ data AnnUnit ann expr = AnnUnit
   , annotated  :: expr
   }
  deriving
-  ( Eq, Ord, Data, Typeable, Hashable
+  ( Eq, Ord, Data, Hashable
   , Generic, Generic1, NFData
   , Functor, Foldable, Traversable
   , Show, Read

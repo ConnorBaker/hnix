@@ -668,7 +668,7 @@ nixSearchPath =
 --  2022-01-26: NOTE: Rename to 'literal'
 newtype NOpName = NOpName Text
   deriving
-    (Eq, Ord, Generic, Typeable, Data, Show, NFData)
+    (Eq, Ord, Generic, Data, Show, NFData)
 
 instance IsString NOpName where
   fromString = coerce . fromString @Text
@@ -696,7 +696,7 @@ opWithLoc f op name = f . (op <$) <$> annotateLocation1 (operator name)
 --  https://youtu.be/qaPdg0mZavM?t=1757
 --  https://wiki.haskell.org/The_Monad.Reader/Issue5/Number_Param_Types
 newtype NOpPrecedence = NOpPrecedence Int
-  deriving (Eq, Ord, Generic, Bounded, Typeable, Data, Show, NFData)
+  deriving (Eq, Ord, Generic, Bounded, Data, Show, NFData)
 
 instance Enum NOpPrecedence where
   toEnum = coerce
@@ -712,14 +712,14 @@ instance Num NOpPrecedence where
 
 --  2022-01-26: NOTE: This type belongs into 'Type.Expr' & be used in NExprF.
 data NAppOp = NAppOp
-  deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
+  deriving (Eq, Ord, Generic, Data, Show, NFData)
 
 --  2022-01-26: NOTE: This type belongs into 'Type.Expr' & be used in NExprF.
 data NSpecialOp
   = NHasAttrOp
   | NSelectOp
   | NTerm -- ^ For special handling of internal special cases.
-  deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
+  deriving (Eq, Ord, Generic, Data, Show, NFData)
 
 data NAssoc
   = NAssocLeft
@@ -728,7 +728,7 @@ data NAssoc
   -- | Bidirectional associativity, or simply: associative property.
   | NAssoc
   | NAssocRight
-  deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
+  deriving (Eq, Ord, Generic, Data, Show, NFData)
 
 --  2022-01-31: NOTE: This type and related typeclasses & their design, probably need a refinement.
 --
@@ -751,7 +751,7 @@ data NOperatorDef
   | NBinaryDef  NBinaryOp  NAssoc NOpPrecedence NOpName
   | NSpecialDef NSpecialOp NAssoc NOpPrecedence NOpName
   --  2022-01-26: NOTE: Ord can be the order of evaluation of precedence (which 'Pretty' printing also accounts for).
-  deriving (Eq, Ord, Generic, Typeable, Data, Show, NFData)
+  deriving (Eq, Ord, Generic, Data, Show, NFData)
 
 -- Supplied since its definition gets called/used frequently.
 -- | Functional application operator definition, left associative, high precedence.

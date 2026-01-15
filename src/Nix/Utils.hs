@@ -220,7 +220,7 @@ free fP fF fr =
 newtype Path = Path FilePath
   deriving
     ( Eq, Ord, Generic
-    , Typeable, Data, NFData, Serialise, Binary, A.ToJSON, A.FromJSON
+    , Data, NFData, Serialise, Binary, A.ToJSON, A.FromJSON
     , Show, Read, Hashable
     , Semigroup, Monoid
     )

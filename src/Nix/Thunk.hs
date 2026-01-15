@@ -92,7 +92,6 @@ class
 -- ** @newtype ThunkLoop@
 
 newtype ThunkLoop = ThunkLoop Text -- contains rendering of ThunkId
-  deriving Typeable
 
 instance Show ThunkLoop where
   show (ThunkLoop i) = toString $ "ThunkLoop " <> i

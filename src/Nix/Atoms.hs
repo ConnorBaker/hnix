@@ -53,7 +53,6 @@ data NAtom
     ( Eq
     , Ord
     , Generic
-    , Typeable
     , Data
     , Show
     , Read
