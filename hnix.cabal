@@ -374,6 +374,10 @@ common shared
     -Wall
     -Wno-incomplete-uni-patterns
     -fprint-potential-instances
+    -- TODO(@connorbaker): Debugging/performance
+    -Wall-missed-specialisations
+    -- -flate-specialise
+    -- -fpolymorphic-specialisation
   if flag(optimize)
     default-extensions:
       ApplicativeDo

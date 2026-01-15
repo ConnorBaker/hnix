@@ -2,6 +2,13 @@ semaphore: true
 jobs: $ncpus
 optimization: 1
 
+-- profiling: true
+
+package *
+  -- profiling-detail: none
+  ghc-options:
+    -fobject-determinism
+
 -- GHC 9.14 ships with base-4.22, but many packages haven't updated bounds yet
 allow-newer:
   -- Allow all packages to use newer base (for GHC 9.14 compatibility)
