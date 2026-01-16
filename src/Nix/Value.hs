@@ -490,6 +490,7 @@ type NValue t f m = Free (NValue' t f m) t
 -- ** Free
 
 -- | HOF of @iter@ from @Free@
+-- INLINABLE enables specialization when concrete types are known.
 iterNValue
   :: forall t f m r
    . MonadDataContext f m
@@ -498,6 +499,7 @@ iterNValue
   -> NValue t f m
   -> r
 iterNValue k f = fix ((iter f .) . fmap . k) -- already almost iterNValue'
+{-# INLINABLE iterNValue #-}
 
 iterNValueByDiscardWith
   :: MonadDataContext f m
@@ -506,9 +508,11 @@ iterNValueByDiscardWith
   -> NValue t f m
   -> r
 iterNValueByDiscardWith = iterNValue . const . const
+{-# INLINABLE iterNValueByDiscardWith #-}
 
 
 -- | HOF of @iterM@ from @Free@
+-- INLINABLE enables specialization for normalization hot paths.
 iterNValueM
   :: (MonadDataContext f m, Monad n)
   => (forall x . n x -> m x)
@@ -520,6 +524,7 @@ iterNValueM transform k f = fix (((iterM f <=< go) .) . fmap . k)
   where
     go (Pure x) = Pure <$> x -- It should be a 'sequenceA' if to remote 'transform' form function.
     go (Free fa) = Free <$> bindNValue' transform go fa
+{-# INLINABLE iterNValueM #-}
 
 -- *** Utils
 

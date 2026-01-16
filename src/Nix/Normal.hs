@@ -29,6 +29,9 @@ instance MonadDataErrorContext t f m => Exception (NormalLoop t f m)
 -- Uses a call-stack based approach: we track thunks currently being normalized
 -- to detect cycles, but allow re-normalization of thunks accessed from different
 -- paths (shared references).
+--
+-- INLINABLE allows GHC to specialize this for concrete monad stacks,
+-- which is critical since this is a hot path during --eval output.
 normalizeValue
   :: forall e t m f
    . ( Framed e m
@@ -71,6 +74,7 @@ normalizeValue v = run $ iterNValueM run go (fmap Free . sequenceNValue' run) v
         -- Remove from in-progress (allow re-normalization from other paths)
         lift $ modify $ delete tnkid
         pure result
+{-# INLINABLE normalizeValue #-}
 
 -- | Normalize value.
 -- Detect cycles.
@@ -86,6 +90,7 @@ normalForm
   => NValue t f m
   -> m (NValue t f m)
 normalForm t = stubCycles <$> normalizeValue t
+{-# INLINABLE normalForm #-}
 
 -- | Monadic context of the result.
 normalForm_
@@ -97,6 +102,7 @@ normalForm_
   => NValue t f m
   -> m ()
 normalForm_ t = void $ normalizeValue t
+{-# INLINABLE normalForm_ #-}
 
 opaqueVal :: NVConstraint f => NValue t f m
 opaqueVal = mkNVStrWithoutContext thunkStubText
@@ -123,6 +129,7 @@ stubCycles =
     Free
  where
   Free (NValue' cyc) = opaqueVal
+{-# INLINABLE stubCycles #-}
 
 thunkStubVal :: NVConstraint f => NValue t f m
 thunkStubVal = mkNVStrWithoutContext thunkStubText
@@ -138,6 +145,7 @@ bindComputedThunkOrStub
   -> t
   -> m a
 bindComputedThunkOrStub = (<=< query (pure thunkStubVal))
+{-# INLINABLE bindComputedThunkOrStub #-}
 
 -- | Traverse a value, replacing uncomputed thunks with @\<thunk\>@ stubs.
 --
@@ -168,9 +176,11 @@ removeEffects = go 0
     | otherwise = case v of
         Pure t -> bindComputedThunkOrStub (go (depth + 1)) t
         Free fv -> Free <$> bindNValue' id (go (depth + 1)) fv
+{-# INLINABLE removeEffects #-}
 
 dethunk
   :: (MonadThunk t m (NValue t f m), MonadDataContext f m)
   => t
   -> m (NValue t f m)
 dethunk = bindComputedThunkOrStub removeEffects
+{-# INLINABLE dethunk #-}

@@ -75,7 +75,10 @@ import           Instances.TH.Lift              ()  -- importing Lift Text for G
 
 -- * utils
 
-newtype NPos = NPos Pos
+-- | NPos wraps megaparsec's Pos (which is a Word internally).
+-- UNPACK eliminates the Pos wrapper indirection during parsing
+-- where source positions are created intensively.
+newtype NPos = NPos {-# UNPACK #-} Pos
  deriving stock
    ( Eq, Ord
    , Read, Show
@@ -91,15 +94,19 @@ instance Semigroup NPos where
 -- Source line & column positions change intensively during parsing,
 -- so they are declared strict to avoid memory leaks.
 --
+-- Performance note: UNPACK on NPos fields eliminates boxing overhead.
+-- Source positions are created for every AST node during parsing,
+-- so this optimization has high impact.
+--
 -- The data type is a reimplementation of 'Text.Megaparsec.Pos' 'SourcePos'.
 data NSourcePos =
   NSourcePos
   { -- | Name of source file
-    getSourceName :: Path,
+    getSourceName :: !Path,
     -- | Line number
-    getSourceLine :: NPos,
+    getSourceLine :: {-# UNPACK #-} !NPos,
     -- | Column number
-    getSourceColumn :: NPos
+    getSourceColumn :: {-# UNPACK #-} !NPos
   }
  deriving
    ( Eq, Ord

@@ -99,8 +99,12 @@ type ThunkStateRef m v = Ref m (ThunkState m v)
 
 -- | The type of very basic thunks.
 -- Uses a single IORef for both lock state and value (flattened from 2 IORefs).
+--
+-- Performance note: UNPACK on ThunkId eliminates boxing for the Int
+-- (ThunkId is typically Int from Fresh.Basic). With ~908K thunks created
+-- per nixpkgs evaluation, this saves significant memory.
 data NThunkF m v =
-  Thunk (ThunkId m) (ThunkStateRef m v)
+  Thunk {-# UNPACK #-} !(ThunkId m) !(ThunkStateRef m v)
 
 instance (Eq v, Eq (ThunkId m)) => Eq (NThunkF m v) where
   Thunk x _ == Thunk y _ = x == y

@@ -37,16 +37,20 @@ import           Data.Aeson.Types               ( FromJSON
 -- constantly itself.
 -- "atom", Ancient Greek \( atomos \) - "indivisible" particle,
 -- indivisible expression.
+-- | Atoms are unpacked where beneficial for performance.
+-- Int64 and Double are primitive types that benefit from UNPACK.
+-- Bool and the NNull tag are small enough that boxing is minimal.
+-- NURI with Text is not unpacked as Text is already a reference type.
 data NAtom
   -- | An URI like @https://example.com@.
-  = NURI Text
+  = NURI !Text
   -- | An integer. The Nix implementation uses checked 64-bit integers
   -- that throw an error on overflow.
-  | NInt Int64
+  | NInt {-# UNPACK #-} !Int64
   -- | A floating point number
-  | NFloat Double
+  | NFloat {-# UNPACK #-} !Double
   -- | Booleans. @false@ or @true@.
-  | NBool Bool
+  | NBool !Bool
   -- | Null values. There's only one of this variant: @null@.
   | NNull
   deriving

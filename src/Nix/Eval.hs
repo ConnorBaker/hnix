@@ -201,6 +201,7 @@ eval (NAbs    params body) = do
     fun
 
 eval (NSynHole name) = synHole name
+{-# INLINABLE eval #-}
 
 -- | If you know that the 'scope' action will result in an 'AttrSet v', then
 --   this implementation may be used as an implementation for 'evalWith'.
@@ -215,6 +216,7 @@ evalWithAttrSet aset body = do
   let weakscope = coerce . fst <$> (fromValue @(AttrSet v, PositionSet) =<< demand deferredAset)
 
   pushWeakScope weakscope body
+{-# INLINABLE evalWithAttrSet #-}
 
 attrSetAlter
   :: forall v m
@@ -283,6 +285,7 @@ attrSetAlter allowOverwrite ks' pos m' p' val =
           )
     recurse p'' m'' =
       insertVal . ((toValue @(AttrSet v, PositionSet)) <=< ((,mempty) <$>) . sequenceA . snd) <$> go p'' m'' ks
+{-# INLINABLE attrSetAlter #-}
 
 evalBinds
   :: forall v m
@@ -403,6 +406,7 @@ evalBinds isRecursive binds =
       NamedVar (StaticKey "__overrides" :| []) _ _ -> False
       _ -> True
     )
+{-# INLINABLE evalBinds #-}
 
 evalSelect
   :: forall v m
@@ -436,6 +440,7 @@ evalSelect aset attr =
    where
     left :: m (Either (v, NonEmpty VarName) b)
     left = pure $ Left (x, path)
+{-# INLINABLE evalSelect #-}
 
 -- | Evaluate a component of an attribute path in a context where we are
 -- *retrieving* a value

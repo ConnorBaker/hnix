@@ -42,6 +42,7 @@ module Nix.Utils
   , TransformF
   , loebM
   , adi
+  , cata
 
   , Has(..)
   , askLocal
@@ -325,6 +326,30 @@ adi
   -> Fix f
   -> a
 adi g f = g $ f . (adi g f <$>) . unFix
+{-# INLINABLE adi #-}
+
+-- * Fusion rules for recursion schemes
+--
+-- These RULES pragmas enable GHC to fuse compositions of recursion scheme
+-- operations, eliminating intermediate structures. Key optimizations:
+--
+-- 1. adi/id: When no transform is applied, collapse to plain cata
+-- 2. cata/cata: Fuse composed catamorphisms into a single traversal
+--
+-- Note: Rules fire when GHC can prove the types match. INLINE pragmas on
+-- the base operations ensure rules have opportunity to fire.
+
+{-# RULES
+-- Identity transform elimination: adi id f = cata f
+-- When no transformation is needed, skip the transform overhead
+"adi/id" forall f. adi id f = cata f
+  #-}
+
+-- | Standard catamorphism (fold) over Fix.
+-- Used as the target for adi/id fusion rule.
+cata :: Functor f => Alg f a -> Fix f -> a
+cata f = f . fmap (cata f) . unFix
+{-# INLINABLE cata #-}
 
 
 -- * Has lens
