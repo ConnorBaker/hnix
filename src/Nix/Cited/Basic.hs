@@ -58,18 +58,30 @@ newtype Cited (prov :: Bool) t f m a =
 -- Can't derive Generic through type family, but we don't need it for these instances
 
 -- | Extract the value from a Cited wrapper.
+--
+-- Function SPECIALIZE pragmas are safe here because they only affect this
+-- standalone function, eliminating sbool dispatch overhead without changing
+-- evaluation semantics.
 extractCited :: forall prov t f m a. SBoolI prov => Cited prov t f m a -> a
 extractCited (Cited rep) = case sbool @prov of
   STrue  -> getCited rep
   SFalse -> runIdentity rep
 {-# INLINABLE extractCited #-}
+{-# SPECIALIZE extractCited :: Cited 'True t f m a -> a #-}
+{-# SPECIALIZE extractCited :: Cited 'False t f m a -> a #-}
 
 -- | Get provenance from a Cited wrapper (empty list when prov ~ 'False).
+--
+-- Function SPECIALIZE pragmas are safe here because they only affect this
+-- standalone function, eliminating sbool dispatch overhead without changing
+-- evaluation semantics.
 provenanceCited :: forall prov t f m a. SBoolI prov => Cited prov t f m a -> [Provenance m (NValue t f m)]
 provenanceCited (Cited rep) = case sbool @prov of
   STrue  -> getProvenance rep
   SFalse -> []
 {-# INLINABLE provenanceCited #-}
+{-# SPECIALIZE provenanceCited :: Cited 'True t f m a -> [Provenance m (NValue t f m)] #-}
+{-# SPECIALIZE provenanceCited :: Cited 'False t f m a -> [Provenance m (NValue t f m)] #-}
 
 instance SBoolI prov => Functor (Cited prov t f m) where
   fmap f (Cited rep) = Cited $ case sbool @prov of
@@ -144,6 +156,20 @@ citeLite = fmap (Cited . Identity)
 -- ** Instances
 
 -- | HasCitations1 instance - dispatches based on prov.
+--
+-- __WARNING__: Do NOT add @SPECIALIZE instance@ pragmas here.
+--
+-- Testing revealed that @SPECIALIZE instance@ pragmas on this instance cause
+-- evaluation failures when evaluating nixpkgs (e.g., @release.nix@). The likely
+-- cause is interaction between instance specialization and the @Strict@ language
+-- extension: specialized instances may evaluate arguments more eagerly, breaking
+-- Nix's lazy evaluation semantics and causing paths to be accessed that would
+-- otherwise remain unevaluated.
+--
+-- The @INLINABLE@ pragmas on methods allow GHC to specialize opportunistically
+-- without forcing the strictness changes that break evaluation. Function-level
+-- @SPECIALIZE@ pragmas (like those on 'extractCited' and 'provenanceCited') are
+-- safe because they only affect standalone functions, not instance resolution.
 instance SBoolI prov => HasCitations1 m (NValue t f m) (Cited prov t f m) where
   citations1 = provenanceCited
   {-# INLINABLE citations1 #-}
