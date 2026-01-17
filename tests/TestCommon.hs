@@ -1,3 +1,5 @@
+{-# language DataKinds #-}
+
 module TestCommon
   ( -- * Test-specific type aliases
     StandardIO
@@ -29,13 +31,15 @@ import           System.PosixCompat.Temp
 import           System.Process
 import           Test.Tasty.HUnit
 
--- | Test-specific type aliases using default configuration (all flags disabled)
-type StandardIO = StdM DefaultCfg IO
-type StdVal = StdValue StandardIO
-type StdThun = StdThunk StandardIO
+-- | Test-specific type aliases using default configuration.
+--
+-- DefaultCfg has CfgProv ~ 'False, so we use provenance-disabled types.
+type StandardIO = StdM 'False DefaultCfg IO
+type StdVal = ValueF 'False StandardIO
+type StdThun = ThunkF 'False StandardIO
 
 -- | Run with basic effects in IO using default configuration.
-runWithBasicEffectsIO :: Options -> StdM DefaultCfg IO a -> IO a
+runWithBasicEffectsIO :: Options -> StdM 'False DefaultCfg IO a -> IO a
 runWithBasicEffectsIO = runWithBasicEffects
 
 hnixEvalFile :: Options -> Path -> IO StdVal
@@ -81,7 +85,7 @@ nixEvalText expr =
 
 assertEvalMatchesNix
   :: ( Options
-    -> Text -> IO (NValue t (StdCited StandardIO) StandardIO)
+    -> Text -> IO (NValue t (CitedF 'False StandardIO) StandardIO)
     )
   -> (Text -> IO Text)
   -> Text

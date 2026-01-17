@@ -1,5 +1,6 @@
 {-# language AllowAmbiguousTypes #-}
 {-# language DataKinds #-}
+{-# language KindSignatures #-}
 {-# language MultiWayIf #-}
 {-# language TypeFamilies #-}
 {-# language RecordWildCards #-}
@@ -68,7 +69,7 @@ runDerivationCommand currentTime = \case
         initialPaths <- case drvShowExpr of
           Just expr -> do
             -- Evaluate expression to get derivation
-            drvPath <- evalExprToDrvPath @cfg expr
+            drvPath <- evalExprToDrvPath expr
             pure [drvPath]
           Nothing -> pure drvShowPaths
 
@@ -104,8 +105,8 @@ runDerivationCommand currentTime = \case
 
 -- | Evaluate an expression and extract its drvPath
 evalExprToDrvPath
-  :: forall (cfg :: EvalCfg) m. (StdBase m, KnownEvalCfg cfg)
-  => Text -> StdM cfg m Path
+  :: forall (prov :: Bool) (cfg :: EvalCfg) m. (StdBase m, KnownEvalCfg cfg, SBoolI prov, Typeable prov)
+  => Text -> StdM prov cfg m Path
 evalExprToDrvPath expr = do
   case parseNixTextLoc expr of
     Left err -> fail $ "Parse error: " <> show err
@@ -115,18 +116,18 @@ evalExprToDrvPath expr = do
       case demanded of
         NVSet _ attrs -> case HM.lookup "drvPath" attrs of
           Just drvPathVal -> do
-            drvPathStr <- ignoreContext <$> (fromValue drvPathVal :: StdM cfg m NixString)
+            drvPathStr <- ignoreContext <$> (fromValue drvPathVal :: StdM prov cfg m NixString)
             pure $ coerce $ toString drvPathStr
           Nothing -> fail "Expression does not evaluate to a derivation (missing drvPath)"
         _ -> fail "Expression does not evaluate to an attribute set"
 
 -- | Recursively collect all derivation paths including dependencies
 collectRecursiveDrvPaths
-  :: forall (cfg :: EvalCfg) m. (StdBase m, KnownEvalCfg cfg)
-  => [Path] -> StdM cfg m [Path]
+  :: forall (prov :: Bool) (cfg :: EvalCfg) m. (StdBase m, KnownEvalCfg cfg, SBoolI prov, Typeable prov)
+  => [Path] -> StdM prov cfg m [Path]
 collectRecursiveDrvPaths initialPaths = do
   -- Use a set to track visited paths and avoid duplicates
-  let go :: Set Path -> [Path] -> StdM cfg m (Set Path)
+  let go :: Set Path -> [Path] -> StdM prov cfg m (Set Path)
       go visited [] = pure visited
       go visited (p:ps)
         | p `Set.member` visited = go visited ps
@@ -144,12 +145,12 @@ main' opts@Options{..} =
   -- This enables compile-time specialization in evaluation hot paths.
   withEvalCfg isEvalStats isValues isTrace $
     \(_ :: Proxy cfg) ->
-      runWithStoreEffectsIOT @cfg opts (execContentsFilesOrRepl @cfg)
+      runWithStoreEffectsIOT @cfg opts execContentsFilesOrRepl
  where
   --  2021-07-15: NOTE: This logic should be weaved stronger through CLI options logic (OptParse-Applicative code)
   -- As this logic is not stated in the CLI documentation, for example. So user has no knowledge of these.
   execContentsFilesOrRepl
-    :: forall (cfg :: EvalCfg) m. (StdBase m, KnownEvalCfg cfg) => StdM cfg m ()
+    :: forall (prov :: Bool) (cfg :: EvalCfg) m. (StdBase m, KnownEvalCfg cfg, SBoolI prov, Typeable prov) => StdM prov cfg m ()
   execContentsFilesOrRepl =
     fromMaybe
       loadFromCliFilePathList
@@ -158,7 +159,7 @@ main' opts@Options{..} =
         loadExpressionFromFile
    where
     -- | The base case: read expressions from the last CLI directive (@[FILE]@) listed on the command line.
-    loadFromCliFilePathList :: StdM cfg m ()
+    loadFromCliFilePathList :: StdM prov cfg m ()
     loadFromCliFilePathList =
       case getFilePaths of
         []     -> runRepl
@@ -166,51 +167,51 @@ main' opts@Options{..} =
         _paths -> processSeveralFiles (coerce _paths)
      where
       -- | Fall back to running the REPL
-      runRepl :: StdM cfg m ()
+      runRepl :: StdM prov cfg m ()
       runRepl = withEmptyNixContext Repl.main
 
-      readExpressionFromStdin :: StdM cfg m ()
+      readExpressionFromStdin :: StdM prov cfg m ()
       readExpressionFromStdin =
-        processExpr @cfg =<< liftIO Text.IO.getContents
+        processExpr @prov @cfg =<< liftIO Text.IO.getContents
 
-    processSeveralFiles :: [Path] -> StdM cfg m ()
+    processSeveralFiles :: [Path] -> StdM prov cfg m ()
     processSeveralFiles = traverse_ processFile
      where
-      processFile path = handleResult @cfg (pure path) =<< parseNixFileLoc path
+      processFile path = handleResult @prov @cfg (pure path) =<< parseNixFileLoc path
 
     -- |  The `--read` option: load expression from a serialized file.
-    loadBinaryCacheFile :: Maybe (StdM cfg m ())
+    loadBinaryCacheFile :: Maybe (StdM prov cfg m ())
     loadBinaryCacheFile =
       (\ (binaryCacheFile :: Path) ->
         do
           let file = replaceExtension binaryCacheFile "nixc"
-          processCLIOptions @cfg (pure file) =<< liftIO (readCache binaryCacheFile)
+          processCLIOptions @prov @cfg (pure file) =<< liftIO (readCache binaryCacheFile)
       ) <$> getReadFrom
 
     -- | The `--expr` option: read expression from the argument string
-    loadLiteralExpression :: Maybe (StdM cfg m ())
-    loadLiteralExpression = processExpr @cfg <$> getExpression
+    loadLiteralExpression :: Maybe (StdM prov cfg m ())
+    loadLiteralExpression = processExpr @prov @cfg <$> getExpression
 
     -- | The `--file` argument: evaluate expression from the specified file
-    loadExpressionFromFile :: Maybe (StdM cfg m ())
+    loadExpressionFromFile :: Maybe (StdM prov cfg m ())
     loadExpressionFromFile =
       (\fp -> case fp of
-        "-" -> processExpr @cfg =<< liftIO Text.IO.getContents
-        _   -> let path = coerce fp in handleResult @cfg (pure path) =<< parseNixFileLoc path
+        "-" -> processExpr @prov @cfg =<< liftIO Text.IO.getContents
+        _   -> let path = coerce fp in handleResult @prov @cfg (pure path) =<< parseNixFileLoc path
       ) <$> getFromFile
 
   processExpr
-    :: forall (cfg :: EvalCfg) m. (StdBase m, KnownEvalCfg cfg)
-    => Text -> StdM cfg m ()
-  processExpr = handleResult @cfg mempty . parseNixTextLoc
+    :: forall (prov :: Bool) (cfg :: EvalCfg) m. (StdBase m, KnownEvalCfg cfg, SBoolI prov, Typeable prov)
+    => Text -> StdM prov cfg m ()
+  processExpr = handleResult @prov @cfg mempty . parseNixTextLoc
 
-  withEmptyNixContext :: (StdBase m, KnownEvalCfg cfg) => StdM cfg m a -> StdM cfg m a
+  withEmptyNixContext :: (StdBase m, KnownEvalCfg cfg, SBoolI prov, Typeable prov) => StdM prov cfg m a -> StdM prov cfg m a
   withEmptyNixContext = withNixContext mempty
 
   --  2021-07-15: NOTE: @handleResult@ & @process@ - have atrocious size & compexity, they need to be decomposed & refactored.
   handleResult
-    :: forall (cfg :: EvalCfg) m err. (StdBase m, KnownEvalCfg cfg, Show err)
-    => Maybe Path -> Either err NExprLoc -> StdM cfg m ()
+    :: forall (prov :: Bool) (cfg :: EvalCfg) m err. (StdBase m, KnownEvalCfg cfg, SBoolI prov, Typeable prov, Show err)
+    => Maybe Path -> Either err NExprLoc -> StdM prov cfg m ()
   handleResult mpath =
     either
       (\ err ->
@@ -236,13 +237,13 @@ main' opts@Options{..} =
                 -- liftIO $ putStrLn $ runST $
                 --     runLintM opts . renderSymbolic =<< lint opts expr
 
-          catch (processCLIOptions @cfg mpath expr) $
+          catch (processCLIOptions @prov @cfg mpath expr) $
             \case
               NixException frames ->
                 errorWithoutStackTrace . show =<<
                   renderFrames
-                    @(StdValM cfg m)
-                    @(StdThunM cfg m)
+                    @(StdValM prov cfg m)
+                    @(StdThunM prov cfg m)
                     frames
 
           when isRepl $
@@ -256,8 +257,8 @@ main' opts@Options{..} =
   --  2021-07-15: NOTE: Logic of CLI Option processing is scattered over several functions, needs to be consolicated.
   -- Now uses type-level dispatch for stats/tracing via KnownEvalCfg cfg.
   processCLIOptions
-    :: forall (cfg :: EvalCfg) m. (StdBase m, KnownEvalCfg cfg)
-    => Maybe Path -> NExprLoc -> StdM cfg m ()
+    :: forall (prov :: Bool) (cfg :: EvalCfg) m. (StdBase m, KnownEvalCfg cfg, SBoolI prov, Typeable prov)
+    => Maybe Path -> NExprLoc -> StdM prov cfg m ()
   processCLIOptions mpath expr
     | isEvaluate =
       if
@@ -282,10 +283,10 @@ main' opts@Options{..} =
     evaluateExprWith evaluator = evaluateExpression (coerce mpath) evaluator printer
 
     printer
-      :: StdValM cfg m
-      -> StdM cfg m ()
+      :: StdValM prov cfg m
+      -> StdM prov cfg m ()
     printer
-      | isFinder    = findAttrs <=< fromValue @(AttrSet (StdValM cfg m))
+      | isFinder    = findAttrs <=< fromValue @(AttrSet (StdValM prov cfg m))
       | otherwise = printer'
      where
       -- 2021-05-27: NOTE: With naive fix of the #941
@@ -302,25 +303,25 @@ main' opts@Options{..} =
        where
         out
           :: (b -> Text)
-          -> (a -> StdM cfg m b)
+          -> (a -> StdM prov cfg m b)
           -> a
-          -> StdM cfg m ()
+          -> StdM prov cfg m ()
         out transform val = liftIO . Text.IO.putStrLn . transform <=< val
 
         -- | Special case for JSON: toJSONNixString is monadic, not pure
         outJson
-          :: (b -> StdM cfg m NixString)
-          -> (a -> StdM cfg m b)
+          :: (b -> StdM prov cfg m NixString)
+          -> (a -> StdM prov cfg m b)
           -> a
-          -> StdM cfg m ()
+          -> StdM prov cfg m ()
         outJson transform val a = liftIO . Text.IO.putStrLn . ignoreContext =<< transform =<< val a
 
       findAttrs
-        :: AttrSet (StdValM cfg m)
-        -> StdM cfg m ()
+        :: AttrSet (StdValM prov cfg m)
+        -> StdM prov cfg m ()
       findAttrs = go mempty
        where
-        go :: Text -> AttrSet (StdValM cfg m) -> StdM cfg m ()
+        go :: Text -> AttrSet (StdValM prov cfg m) -> StdM prov cfg m ()
         go prefix s =
           traverse_
             (\ (k, mv) ->
@@ -344,7 +345,7 @@ main' opts@Options{..} =
                 (\ (k, nv) ->
                   (k, ) <$>
                   free
-                    (\ (StdThunk (extract -> Thunk _ ref)) ->
+                    (\ (ThunkF (extract -> Thunk _ ref)) ->
                       do
                         let
                           path         = prefix <> k
@@ -385,16 +386,16 @@ main' opts@Options{..} =
             _                              -> (True , True )
 
           forceEntry
-            :: MonadValue a (StdM cfg m)
+            :: MonadValue a (StdM prov cfg m)
             => Text
             -> a
-            -> StdM cfg m (Maybe a)
+            -> StdM prov cfg m (Maybe a)
           forceEntry k v =
             catch
               (pure <$> demand v)
               fun
            where
-            fun :: NixException -> StdM cfg m (Maybe a)
+            fun :: NixException -> StdM prov cfg m (Maybe a)
             fun (coerce -> frames) =
               do
                 liftIO
@@ -402,8 +403,8 @@ main' opts@Options{..} =
                   . (("Exception forcing " <> k <> ": ") <>)
                   . show =<<
                   renderFrames
-                      @(StdValM cfg m)
-                      @(StdThunM cfg m)
+                      @(StdValM prov cfg m)
+                      @(StdThunM prov cfg m)
                       frames
                 pure Nothing
 
