@@ -57,15 +57,21 @@ import           Relude
 -- Import test modules to trigger their compile-time inspection checks.
 -- These imports are "redundant" in terms of runtime use, but the act of
 -- compiling them triggers the inspection tests via Template Haskell.
+import           Inspection.AttrSet     ()
 import           Inspection.Cited       ()
 import           Inspection.Coerce      ()
 import           Inspection.Comonad     ()
 import           Inspection.Config      ()
+import           Inspection.Convert     ()
 import           Inspection.Functor     ()
 import           Inspection.HasCitations ()
 import           Inspection.Integration ()
+import           Inspection.MonadThunk  ()
+import           Inspection.NixString   ()
+import           Inspection.Scope       ()
 import           Inspection.Singleton   ()
 import           Inspection.Thunk       ()
+import           Inspection.Value       ()
 
 -- | Run the inspection tests.
 --
@@ -78,42 +84,30 @@ main = do
   putStrLn ""
   putStrLn "All inspection tests verified at compile time!"
   putStrLn ""
-  putStrLn "Test modules (106 total compile-time tests):"
+  putStrLn "Test modules:"
   putStrLn ""
-  putStrLn "1. Cited module (5 tests):"
-  putStrLn "   - extractCited/provenanceCited specialization"
-  putStrLn "   - No SBoolI dictionaries, NCited, Identity types"
+  putStrLn "Core Cited/Provenance tests:"
+  putStrLn "  1. Cited      - extractCited/provenanceCited specialization"
+  putStrLn "  2. Coerce     - Newtype coercion zero-cost verification"
+  putStrLn "  3. Comonad    - extract/duplicate for Cited and CitedF"
+  putStrLn "  4. Functor    - Functor, Applicative, Foldable, Traversable"
+  putStrLn "  5. HasCitations - citations1/addProvenance1 specialization"
   putStrLn ""
-  putStrLn "2. Singleton module (8 tests):"
-  putStrLn "   - sbool @'False/@'True branch elimination"
-  putStrLn "   - ifSBool helper specialization"
+  putStrLn "Configuration and dispatch tests:"
+  putStrLn "  6. Config     - singStats/singProv/singTrace dispatch"
+  putStrLn "  7. Singleton  - sbool @'False/@'True branch elimination"
   putStrLn ""
-  putStrLn "3. Thunk module (9 tests):"
-  putStrLn "   - CitedF extract/fmap specialization"
-  putStrLn "   - No provenance types in generated Core"
+  putStrLn "Evaluator component tests:"
+  putStrLn "  8. Thunk      - CitedF extract/fmap specialization"
+  putStrLn "  9. Integration - Full wrapper chain erasure"
+  putStrLn "  10. MonadThunk - thunk/force/query operations"
+  putStrLn "  11. Value     - NValue construction and extraction"
+  putStrLn "  12. Convert   - Coercion and unwrapping operations"
   putStrLn ""
-  putStrLn "4. Integration module (6 tests):"
-  putStrLn "   - Full wrapper chain erasure"
-  putStrLn "   - Config dispatch specialization"
-  putStrLn ""
-  putStrLn "5. Comonad module (14 tests):"
-  putStrLn "   - extract/duplicate for Cited and CitedF"
-  putStrLn "   - No type class dictionaries or provenance types"
-  putStrLn ""
-  putStrLn "6. Functor module (26 tests):"
-  putStrLn "   - Functor, Applicative, Foldable, Traversable instances"
-  putStrLn "   - For both Cited and CitedF types"
-  putStrLn ""
-  putStrLn "7. HasCitations module (18 tests):"
-  putStrLn "   - citations1/addProvenance1 for Cited, CitedF, ThunkF"
-  putStrLn "   - No SBoolI dictionaries, NCited, Identity types"
-  putStrLn ""
-  putStrLn "8. Coerce module (7 tests):"
-  putStrLn "   - Newtype coercion zero-cost verification"
-  putStrLn "   - Roundtrip coercion is identity"
-  putStrLn ""
-  putStrLn "9. Config module (13 tests):"
-  putStrLn "   - singStats/singProv/singTrace dispatch"
-  putStrLn "   - Combined flag dispatch (all DefaultCfg flags false)"
+  putStrLn "Data structure tests:"
+  putStrLn "  13. Scope     - scopeLookup efficiency"
+  putStrLn "  14. NixString - String construction and extraction"
+  putStrLn "  15. AttrSet   - Attribute set pattern matching and construction"
   putStrLn ""
   putStrLn "All inspection tests passed!"
+  putStrLn "(Actual test counts verified at compile time)"
