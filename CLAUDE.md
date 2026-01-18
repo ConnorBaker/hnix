@@ -126,7 +126,7 @@ type NExprLoc = Fix (AnnF SrcSpan NExprF)
 
 ### Using ADI for Custom Behavior
 
-The `adi` function (`src/Nix/Utils.hs:321`) enables behavior injection:
+The `adi` function (`src/Nix/Utils.hs`) enables behavior injection:
 
 ```haskell
 -- Example: Add tracing to evaluation
@@ -165,9 +165,25 @@ type NValue t f m = Free (NValue' t f m) t
 ### Core Type Classes
 
 ```haskell
-class MonadEval v m where
-  evalExprLoc :: NExprLoc -> m v  -- Evaluate expression
-  evalError :: Doc v -> m a        -- Report error
+-- Core evaluation typeclass (src/Nix/Eval.hs)
+class (Show v, Monad m) => MonadEval v m where
+  freeVariable    :: VarName -> m v
+  synHole         :: VarName -> m v
+  attrMissing     :: NonEmpty VarName -> Maybe v -> m v
+  evaledSym       :: VarName -> v -> m v
+  evalCurPos      :: m v
+  evalConstant    :: NAtom -> m v
+  evalString      :: NString (m v) -> m v
+  evalLiteralPath :: Path -> m v
+  evalEnvPath     :: Path -> m v
+  evalUnary       :: NUnaryOp -> v -> m v
+  evalBinary      :: NBinaryOp -> v -> m v -> m v
+  evalWith        :: m v -> m v -> m v
+  evalIf          :: v -> m v -> m v -> m v
+  evalAssert      :: v -> m v -> m v
+  evalApp         :: v -> m v -> m v
+  evalAbs         :: Params (m v) -> (forall a. m v -> (AttrSet (m v) -> m v -> m (a, v)) -> m (a, v)) -> m v
+  -- ... additional methods for list, set, select, hasAttr, let, path
 
 class MonadThunkId m => MonadThunk t m a | t -> m, t -> a where
   thunkId  :: t -> ThunkId m        -- Return thunk ID
@@ -177,7 +193,21 @@ class MonadThunkId m => MonadThunk t m a | t -> m, t -> a where
   forceEff :: t -> m a              -- Force with effects
   further  :: t -> m t              -- Modify thunk action
 
-class (MonadEval v m, MonadThunk t m v) => MonadNix e t f m
+-- MonadNix is a type alias, not a class (src/Nix/Exec.hs)
+type MonadNix e t f m =
+  ( Has e SrcSpan
+  , Has e Options
+  , Has e (Maybe EvalStats)
+  , Scoped (NValue t f m) m
+  , Framed e m
+  , MonadFix m
+  , MonadCatch m
+  , MonadThrow m
+  , Alternative m
+  , MonadEffects t f m
+  , MonadCitedThunks t f m
+  , MonadValue (NValue t f m) m
+  )
 ```
 
 ### Adding New Effects
@@ -194,6 +224,64 @@ newtype MyNix m a = MyNix (ReaderT MyEnv m a)
 instance MonadMyEffect (MyNix m) where
   myOperation s = MyNix $ asks (lookupThing s . myEnvData)
 ```
+
+### Type-Level Configuration System
+
+HNix uses type-level configuration to enable zero-cost conditional features. The system is defined in `src/Nix/Config/Singleton.hs`.
+
+```haskell
+-- Type-level configuration kind
+data EvalCfg = MkEvalCfg
+  { cfgStats  :: Bool  -- Evaluation statistics
+  , cfgProv   :: Bool  -- Provenance tracking
+  , cfgTrace  :: Bool  -- Trace evaluation
+  }
+
+-- Default configuration (all features disabled)
+type DefaultCfg = 'MkEvalCfg 'False 'False 'False
+
+-- Constraint for known configurations
+type KnownEvalCfg cfg =
+  ( KnownBool (CfgStats cfg)
+  , KnownBool (CfgProv cfg)
+  , KnownBool (CfgTrace cfg)
+  )
+
+-- Bridge runtime options to compile-time config
+withEvalCfg
+  :: Bool  -- ^ stats
+  -> Bool  -- ^ prov
+  -> Bool  -- ^ tracing
+  -> (forall cfg. KnownEvalCfg cfg => Proxy cfg -> r)  -- ^ default
+  -> (forall cfg prov. (KnownEvalCfg cfg, SBoolI prov) => Proxy cfg -> Proxy prov -> r)  -- ^ callback
+  -> r
+```
+
+**Usage**: At program startup, `withEvalCfg` examines runtime options and selects the appropriate type-level configuration, enabling GHC to specialize code paths and eliminate dead branches.
+
+### Provenance-Indexed Value System
+
+Values and thunks are parameterized by a `prov :: Bool` type that controls provenance tracking at the type level. This is defined in `src/Nix/Standard.hs`.
+
+```haskell
+-- Cited functor - wraps values with optional provenance
+-- When prov ~ 'True:  stores full provenance list (NCited wrapper)
+-- When prov ~ 'False: zero overhead (Identity wrapper)
+newtype CitedF (prov :: Bool) m a =
+  CitedF (Cited prov (ThunkF prov m) (CitedF prov m) m a)
+
+-- Thunk type parameterized by provenance
+newtype ThunkF (prov :: Bool) m =
+  ThunkF (CitedF prov m (NThunkF m (ValueF prov m)))
+
+-- Value type parameterized by provenance
+type ValueF (prov :: Bool) m = NValue (ThunkF prov m) (CitedF prov m) m
+
+-- Standard evaluation monad with compile-time config and provenance
+type StdM (prov :: Bool) (cfg :: EvalCfg) m = StandardT prov cfg (StdIdT m)
+```
+
+**Key benefit**: When `prov ~ 'False`, the `CitedF` newtype erases completely at runtime, making provenance tracking truly zero-cost when disabled.
 
 ## Extending HNix
 
@@ -455,6 +543,41 @@ goldenEval name expr = goldenVsString name path $ do
   result <- runLazyM defaultOptions $ evalExprLoc expr
   pure $ encodeUtf8 $ prettyNValue result
 ```
+
+### Inspection Tests (`tests/inspection/`)
+
+Compile-time tests using `inspection-testing` to verify zero-overhead abstractions. Run with:
+```bash
+nix develop ".?submodules=1#" --command cabal test hnix-inspection
+```
+
+**What they verify**:
+1. **Singleton dispatch elimination**: When `sbool @'False` is used, GHC eliminates the `STrue` branch entirely
+2. **Newtype erasure**: `Cited`, `CitedF`, and `ThunkF` wrappers are completely erased in generated code
+3. **Type class specialization**: No `SBoolI` dictionaries remain for concrete type applications
+4. **Provenance type elimination**: `NCited`, `Provenance`, and `Identity` types don't appear in Core for `prov ~ 'False` code paths
+5. **Instance method specialization**: Functor, Applicative, Comonad, Foldable, Traversable, and HasCitations instances all specialize
+6. **Config dispatch**: All config flags (stats, prov, trace) dispatch without runtime overhead for DefaultCfg
+
+**16 test modules** cover: Cited, Singleton, Comonad, Functor, Coerce, Integration, Thunk, Config, HasCitations, Types, Scope, MonadThunk, NixString, Value, Convert, AttrSet
+
+On failure, inspection-testing shows the GHC Core that violated the property.
+
+### Memory Benchmarks (`benchmarks/weigh/`)
+
+Memory allocation benchmarks using the `weigh` library. Run with:
+```bash
+nix develop ".?submodules=1#" --command cabal bench hnix-weigh
+```
+
+**What they measure**:
+- Scope operations (lookup, insert, delete)
+- Vector vs list allocation
+- HashMap operations
+- Singleton bool dispatch overhead
+- Nix expression evaluation allocation
+
+Results are output as markdown tables showing: allocated bytes, GC count, live bytes, max bytes.
 
 ## Important Implementation Notes
 
