@@ -43,25 +43,12 @@
               final.haskell-nix.project' {
                 src = ./.;
                 supportHpack = true;
-                compiler-nix-name = "ghc9141";
+                compiler-nix-name = "ghc912";
                 shell = {
                   tools = {
-                    cabal.cabalProjectLocal = ''
-                      -- Some relaxed bounds are needed for base.
-                      allow-newer:
-                        semaphore-compat:base,
-                        HTTP:base,
-
-                      -- GHC 9.14's bundled exceptions-0.10.11 has broken template-haskell-inplace refs.
-                      -- Force building from Hackage source instead.
-                      source-repository-package
-                        type: git
-                        location: https://github.com/ekmett/exceptions.git
-                        tag: v0.10.11
-                        --sha256: sha256-kabkX239AgEdzcDfQMJQF7gOgZSrv3AqqCMOf0o0thQ=
-                    '';
-                    # hlint = {};
-                    # haskell-language-server = {};
+                    cabal = {};
+                    hlint = {};
+                    haskell-language-server = {};
                   };
                   buildInputs = with pkgs; [
                     pkg-config

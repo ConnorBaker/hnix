@@ -9,12 +9,6 @@ package *
   ghc-options:
     -fobject-determinism
 
--- GHC 9.14 ships with base-4.22, but many packages haven't updated bounds yet
-allow-newer:
-  -- Allow all packages to use newer base (for GHC 9.14 compatibility)
-  *:base,
-  *:template-haskell,
-
 packages:
   .
   ./hnix-store/hnix-store-core
@@ -25,10 +19,15 @@ packages:
   ./hnix-store/hnix-store-remote
   ./hnix-store/hnix-store-tests
 
--- GHC 9.14's bundled exceptions-0.10.11 has broken template-haskell-inplace refs.
--- Force building from Hackage source instead.
+-- Performance testing packages
 source-repository-package
   type: git
-  location: https://github.com/ekmett/exceptions.git
-  tag: v0.10.11
-  --sha256: sha256-kabkX239AgEdzcDfQMJQF7gOgZSrv3AqqCMOf0o0thQ=
+  location: https://github.com/nomeata/inspection-testing.git
+  tag: 0.6.2
+  --sha256: sha256-6b2g/mH5NG6HGdmQJGwUWYfZo9/xJZd7EgoMi1utfCc=
+
+source-repository-package
+  type: git
+  location: https://github.com/fpco/weigh.git
+  tag: 0.0.18
+  --sha256: sha256-URsFBx01N1WlCZcy1LBQQ4M4NqBVAzLTA9FwVzPVSJc=

@@ -28,8 +28,8 @@
 --     (isEvalStats opts)
 --     (isValues opts)
 --     (isTrace opts)
---     $ \\(_ :: Proxy cfg) ->
---         runEvaluation \@cfg ...
+--     (\\(_ :: Proxy DefaultCfg) -> runEvaluation \@DefaultCfg ...)
+--     (\\(_ :: Proxy cfg) -> runEvaluation \@cfg ...)
 -- @
 --
 -- Within evaluation code, use 'singStats', 'singProv', and 'singTrace'
@@ -81,14 +81,6 @@ import           Relude
 
 import           Data.Singletons.Bool (SBool(..), SBoolI(..), sbool)
 
--- | Like 'reifyBool' from singleton-bool, but also provides 'Typeable' constraint.
--- This is needed because the standard 'reifyBool' only provides 'SBoolI',
--- but 'renderFrames' needs 'Typeable (StdValM cfg m)' which requires 'Typeable cfg'.
-reifyBoolT :: forall r. Bool -> (forall b. (SBoolI b, Typeable b) => Proxy b -> r) -> r
-reifyBoolT True  k = k (Proxy @'True)
-reifyBoolT False k = k (Proxy @'False)
-{-# INLINE reifyBoolT #-}
-
 -- | Type-level configuration record (promoted to kind level via DataKinds).
 --
 -- Each field corresponds to a runtime configuration option that affects
@@ -123,11 +115,14 @@ type family CfgTrace (cfg :: EvalCfg) :: Bool where
 --
 -- Includes 'Typeable cfg' because renderFrames requires @Typeable v@ where
 -- @v = StdValM cfg m@, which needs @Typeable cfg@.
+-- Includes 'Typeable (CfgProv cfg)' because the provenance type is used
+-- throughout the evaluation stack and needs Typeable for error handling.
 type KnownEvalCfg cfg =
   ( SBoolI (CfgStats cfg)
   , SBoolI (CfgProv cfg)
   , SBoolI (CfgTrace cfg)
   , Typeable cfg
+  , Typeable (CfgProv cfg)
   )
 
 -- | Constraint for functions that only need stats flag.
@@ -229,22 +224,33 @@ whenTraceM action = ifTrace @cfg action (pure ())
 --     (isEvalStats opts)
 --     (isValues opts)
 --     (isTrace opts)
---     $ \\(_ :: Proxy cfg) -> do
+--     (\\(_ :: Proxy DefaultCfg) -> runEvaluation \@DefaultCfg ...)
+--     (\\(_ :: Proxy cfg) -> do
 --         -- From here, use \@cfg type application
---         runEvaluation \@cfg ...
+--         runEvaluation \@cfg ...)
 -- @
 --
--- The CPS style ensures that the type-level configuration is available
--- throughout the entire evaluation scope.
+-- The explicit case dispatch (rather than CPS with existential quantification)
+-- ensures that GHC sees CONCRETE types in each branch, enabling full
+-- specialization of downstream code. This eliminates sbool runtime dispatch.
+--
+-- Previously this used @reifyBoolT@ which existentially quantified the type,
+-- preventing GHC from specializing. With explicit enumeration, each branch
+-- has a statically-known @cfg@ type.
 withEvalCfg
   :: Bool  -- ^ Collect stats
   -> Bool  -- ^ Track provenance
   -> Bool  -- ^ Enable tracing
+  -> (Proxy DefaultCfg -> r)  -- ^ Fast path for default config (all flags False)
   -> (forall cfg. KnownEvalCfg cfg => Proxy cfg -> r)
   -> r
-withEvalCfg stats prov tracing k =
-  reifyBoolT stats $ \(_ :: Proxy s) ->
-    reifyBoolT prov $ \(_ :: Proxy p) ->
-      reifyBoolT tracing $ \(_ :: Proxy t) ->
-        k (Proxy @('MkEvalCfg s p t))
+withEvalCfg stats prov tracing kDefault k = case (stats, prov, tracing) of
+  (False, False, False) -> kDefault (Proxy @DefaultCfg)
+  (False, False, True)  -> k (Proxy @('MkEvalCfg 'False 'False 'True))
+  (False, True,  False) -> k (Proxy @('MkEvalCfg 'False 'True  'False))
+  (False, True,  True)  -> k (Proxy @('MkEvalCfg 'False 'True  'True))
+  (True,  False, False) -> k (Proxy @('MkEvalCfg 'True  'False 'False))
+  (True,  False, True)  -> k (Proxy @('MkEvalCfg 'True  'False 'True))
+  (True,  True,  False) -> k (Proxy @('MkEvalCfg 'True  'True  'False))
+  (True,  True,  True)  -> k (Proxy @('MkEvalCfg 'True  'True  'True))
 {-# INLINE withEvalCfg #-}

@@ -63,8 +63,12 @@ runDerivationCommand currentTime = \case
   DerivationShow DerivationShowOpts{..} -> do
     let opts = defaultOptions currentTime
     -- Use minimal config for derivation show (no stats, no tracing)
-    withEvalCfg False False False $ \(_ :: Proxy cfg) ->
-      runWithStoreEffectsIOT @cfg opts $ do
+    let
+      runDerivation
+        :: forall (prov :: Bool) (cfg :: EvalCfg) m
+         . (StdBase m, KnownEvalCfg cfg, SBoolI prov, Typeable prov)
+        => StdM prov cfg m ()
+      runDerivation = do
         -- Get initial paths from either --expr or positional arguments
         initialPaths <- case drvShowExpr of
           Just expr -> do
@@ -99,6 +103,13 @@ runDerivationCommand currentTime = \case
             then LBS.putStr $ A.encodePretty' prettyConfig jsonOutput
             else LBS.putStr $ A.encode jsonOutput
           putStrLn ""
+    withEvalCfg False False False
+      (\(_ :: Proxy DefaultCfg) ->
+        runWithStoreEffectsIOT @DefaultCfg opts runDerivation
+      )
+      (\(_ :: Proxy cfg) ->
+        runWithStoreEffectsIOT @cfg opts runDerivation
+      )
    where
     -- Configure aeson-pretty to match Nix's output format (2-space indentation)
     prettyConfig = A.defConfig { A.confIndent = A.Spaces 2 }
@@ -143,9 +154,13 @@ main' :: Options -> IO ()
 main' opts@Options{..} =
   -- Bridge runtime options to type-level configuration.
   -- This enables compile-time specialization in evaluation hot paths.
-  withEvalCfg isEvalStats isValues isTrace $
-    \(_ :: Proxy cfg) ->
+  withEvalCfg isEvalStats isValues isTrace
+    (\(_ :: Proxy DefaultCfg) ->
+      runWithStoreEffectsIOT @DefaultCfg opts execContentsFilesOrRepl
+    )
+    (\(_ :: Proxy cfg) ->
       runWithStoreEffectsIOT @cfg opts execContentsFilesOrRepl
+    )
  where
   --  2021-07-15: NOTE: This logic should be weaved stronger through CLI options logic (OptParse-Applicative code)
   -- As this logic is not stated in the CLI documentation, for example. So user has no knowledge of these.
@@ -431,4 +446,3 @@ main' opts@Options{..} =
           putStrLn $ "Wrote sifted expression tree to " <> path
           writeFile path $ show $ prettyNix $ stripAnnotation expr'
       either throwM pure eres
-
