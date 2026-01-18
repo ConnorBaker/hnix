@@ -535,6 +535,8 @@ executable hnix
     , prettyprinter
     , ref-tf
     , repline >= 0.4.0.0
+  ghc-options:
+    -rtsopts
   if impl(ghc < 8.10)
     -- GHC < 8.10 comes with haskeline < 0.8, which we don't support.
     -- To simplify CI, we just disable the component.
@@ -584,3 +586,38 @@ benchmark hnix-benchmarks
   build-depends:
     hnix
     , criterion
+
+benchmark hnix-weigh
+  import: shared
+  type: exitcode-stdio-1.0
+  main-is: Main.hs
+  hs-source-dirs:
+    benchmarks/weigh
+  build-depends:
+    hnix
+    , weigh
+
+test-suite hnix-inspection
+  import: shared
+  type: exitcode-stdio-1.0
+  main-is: Main.hs
+  other-modules:
+    Inspection.Cited
+    Inspection.Coerce
+    Inspection.Comonad
+    Inspection.Config
+    Inspection.Functor
+    Inspection.HasCitations
+    Inspection.Integration
+    Inspection.Singleton
+    Inspection.Thunk
+    Inspection.Types
+  hs-source-dirs:
+    tests/inspection
+  build-depends:
+    hnix
+    , comonad
+    , inspection-testing
+    , template-haskell
+  -- inspection-testing requires optimization to work correctly
+  ghc-options: -O
