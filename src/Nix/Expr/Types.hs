@@ -35,7 +35,9 @@ import qualified Codec.Serialise               as Serialise
 import           Codec.Serialise                ( Serialise )
 -- VarName is now imported from hnix-types for Backpack compatibility
 import           Nix.Types.VarName
--- AttrSet operations from hnix-core (instantiated via Backpack)
+-- AttrSet operations from hnix-core are available but not yet used
+-- The abstract type lacks some instances (Ord, Data, Serialise, etc.)
+-- needed for deriving on Params and other types.
 import qualified Nix.Core.AttrSet              as CoreAttrSet
 import           Control.DeepSeq                ( NFData1(..) )
 import           Data.Aeson
@@ -128,8 +130,10 @@ toSourcePos :: NSourcePos -> SourcePos
 toSourcePos (NSourcePos f l c) =
   SourcePos (coerce f) (coerce l) (coerce c)
 
---  2021-07-16: NOTE: Should replace @ParamSet@ List
--- | > Hashmap VarName -- type synonym
+-- | AttrSet type alias for HashMap VarName.
+-- Note: We keep this as a type alias (not the abstract type from hnix-core)
+-- because the abstract type lacks instances like Ord, Data, Serialise, Binary,
+-- ToJSON/FromJSON needed for deriving on Params and other types.
 type AttrSet = HashMap VarName
 
 -- | Holds file positionng information for abstrations.
