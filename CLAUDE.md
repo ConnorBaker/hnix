@@ -639,7 +639,16 @@ hnix/
 │   └── hnix-list-vector/            # Vector-backed NixList
 │       └── src/Nix/List/Vector.hs
 │
-└── (main hnix package)              # Uses implementations via mixins
+├── hnix-core/                       # Indefinite package (uses signatures)
+│   └── src/Nix/Core/
+│       ├── AttrSet.hs               # Re-exports AttrSet signature
+│       ├── List.hs                  # Re-exports NixList signature
+│       └── Expr/Types.hs            # PositionSet, ParamSet types
+│
+├── hnix-instantiated/               # Demo instantiation with mixins
+│   └── src/Nix/Instantiated.hs      # Re-exports with concrete types
+│
+└── (main hnix package)              # Currently unchanged, gradual migration
 ```
 
 ### Building Individual Packages
@@ -650,6 +659,12 @@ nix develop ".?submodules=1#" --command cabal build hnix-types
 
 # Build implementations
 nix develop ".?submodules=1#" --command cabal build hnix-attrset-hashmap hnix-list-vector
+
+# Build indefinite package (abstract, not directly usable)
+nix develop ".?submodules=1#" --command cabal build hnix-core
+
+# Build instantiated package (with HashMap/Vector)
+nix develop ".?submodules=1#" --command cabal build hnix-instantiated
 
 # Build main library (still works independently)
 nix develop ".?submodules=1#" --command cabal build lib:hnix
@@ -671,13 +686,16 @@ nix develop ".?submodules=1#" --command cabal build lib:hnix
 - `hnix-list-sig` signature defining NixList interface
 - `hnix-attrset-hashmap` HashMap implementation
 - `hnix-list-vector` Vector implementation
-- All packages build successfully
+- `hnix-core` indefinite package that uses signatures
+  - `Nix.Core.Expr.Types` with PositionSet, ParamSet types
+- `hnix-instantiated` demo package with working mixins
+- Backpack instantiation verified working (GHC monomorphizes correctly)
 
 **Next Steps:**
-1. Create `hnix-core` indefinite package that uses signatures
-2. Migrate core modules to import from signatures
-3. Update main `hnix` package to use mixins for instantiation
-4. Add alternative implementations (Map, Seq) for benchmarking
+1. Continue migrating modules from main hnix to hnix-core
+2. Update main `hnix` package to depend on instantiated hnix-core
+3. Add alternative implementations (Map, Seq) for benchmarking
+4. Add inspection tests to verify monomorphization
 
 ### Migration Guide
 
