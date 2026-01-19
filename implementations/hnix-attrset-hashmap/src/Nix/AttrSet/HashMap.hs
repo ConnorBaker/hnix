@@ -45,14 +45,16 @@ import           Nix.Types.VarName (VarName)
 import qualified Codec.Serialise as Serialise
 import           Codec.Serialise (Serialise)
 import qualified Data.Aeson as Aeson
-import           Data.Aeson (ToJSON(..), FromJSON(..))
+import           Data.Aeson (ToJSON(..), FromJSON(..), ToJSON1(..), FromJSON1(..))
 import qualified Data.Binary as Binary
 import           Data.Binary (Binary)
 import           Data.Data (Data(..), mkNoRepType)
 import           Data.HashMap.Strict ()
 import qualified Data.HashMap.Strict as HM
-import           Control.DeepSeq ()
+import           Control.DeepSeq (NFData1(..))
+import           Data.Functor.Classes (Eq1(..), Ord1(..), Show1(..), Read1(..))
 import           Data.Hashable ()
+import           Data.Hashable.Lifted (Hashable1(..))
 import qualified Text.Read as Read
 
 -- | Concrete AttrSet type backed by HashMap.
@@ -117,6 +119,48 @@ instance (Data a, Typeable a) => Data (AttrSet a) where
   dataTypeOf _ = mkNoRepType "Nix.AttrSet.HashMap.AttrSet"
   {-# INLINE gfoldl #-}
   {-# INLINE gunfold #-}
+
+-- | NFData1 for deriving NFData1 on types containing AttrSet
+instance NFData1 AttrSet where
+  liftRnf f (AttrSet m) = liftRnf f m
+  {-# INLINE liftRnf #-}
+
+-- | ToJSON1 for deriving ToJSON1 on types containing AttrSet
+instance ToJSON1 AttrSet where
+  liftToJSON omit toJ toJList (AttrSet m) = Aeson.liftToJSON omit toJ toJList m
+  liftToEncoding omit toE toEList (AttrSet m) = Aeson.liftToEncoding omit toE toEList m
+  {-# INLINE liftToJSON #-}
+  {-# INLINE liftToEncoding #-}
+
+-- | FromJSON1 for deriving FromJSON1 on types containing AttrSet
+instance FromJSON1 AttrSet where
+  liftParseJSON maybeParser pJ pJList v = AttrSet <$> Aeson.liftParseJSON maybeParser pJ pJList v
+  {-# INLINE liftParseJSON #-}
+
+-- | Eq1 for deriving Eq1 on types containing AttrSet
+instance Eq1 AttrSet where
+  liftEq f (AttrSet m1) (AttrSet m2) = liftEq f m1 m2
+  {-# INLINE liftEq #-}
+
+-- | Ord1 for deriving Ord1 on types containing AttrSet
+instance Ord1 AttrSet where
+  liftCompare f (AttrSet m1) (AttrSet m2) = liftCompare f m1 m2
+  {-# INLINE liftCompare #-}
+
+-- | Show1 for deriving Show1 on types containing AttrSet
+instance Show1 AttrSet where
+  liftShowsPrec sp sl d (AttrSet m) = liftShowsPrec sp sl d m
+  {-# INLINE liftShowsPrec #-}
+
+-- | Read1 for deriving Read1 on types containing AttrSet
+instance Read1 AttrSet where
+  liftReadsPrec rp rl d = map (\(a, r) -> (AttrSet a, r)) . liftReadsPrec rp rl d
+  {-# INLINE liftReadsPrec #-}
+
+-- | Hashable1 for deriving Hashable1 on types containing AttrSet
+instance Hashable1 AttrSet where
+  liftHashWithSalt h s (AttrSet m) = liftHashWithSalt h s m
+  {-# INLINE liftHashWithSalt #-}
 
 -- * Core operations
 
