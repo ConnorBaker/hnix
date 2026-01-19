@@ -9,14 +9,18 @@ module Nix.Instantiated
     module Nix.Core.AttrSet
     -- * NixList operations (backed by Vector)
   , module Nix.Core.List
-    -- * Demo function
+    -- * Expression types
+  , module Nix.Core.Expr.Types
+    -- * Demo functions
   , demoAttrSet
   , demoList
+  , demoPositionSet
   ) where
 
 import Relude hiding (empty, fromList, toList, null)
 import Nix.Core.AttrSet
 import Nix.Core.List
+import Nix.Core.Expr.Types
 
 -- | Demo function showing AttrSet operations work.
 demoAttrSet :: AttrSet Int
@@ -29,3 +33,7 @@ demoAttrSet = fromList
 -- | Demo function showing NixList operations work.
 demoList :: NixList Int
 demoList = nlFromList [1, 2, 3, 4, 5]
+
+-- | Demo function showing PositionSet works.
+demoPositionSet :: PositionSet
+demoPositionSet = emptyPositionSet

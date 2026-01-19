@@ -49,6 +49,7 @@ library
   exposed-modules:
     Nix.Core.AttrSet
     Nix.Core.List
+    Nix.Core.Expr.Types
   hs-source-dirs:
     src
   build-depends:
