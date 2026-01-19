@@ -203,8 +203,6 @@ instance (Binary k, Binary v, Eq k, Hashable k, Ord k) => Binary (HashMap k v) w
   get = HM.fromList <$> Binary.get
 
 -- TH Lift instance for VarName is provided by hnix-types
-  lift v = [| mkVarName $(TH.lift (varNameText v)) |]
-  liftTyped v = [|| mkVarName $$(TH.liftTyped (varNameText v)) ||]
 
 -- ** data Params
 
