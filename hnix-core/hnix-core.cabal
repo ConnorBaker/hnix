@@ -50,6 +50,9 @@ library
     Nix.Core.AttrSet
     Nix.Core.List
     Nix.Core.Expr.Types
+    Nix.Core.Scope
+    Nix.Core.Utils
+    Nix.Core.Value
   hs-source-dirs:
     src
   build-depends:
@@ -59,7 +62,11 @@ library
     , hnix-types
     , hnix-attrset-sig
     , hnix-list-sig
+    , lens-family >= 1.2.2
+    , lens-family-core >= 1.2.2
+    , mtl >= 2.2.2
     , relude >= 1.0.0
+    , transformers >= 0.4
   ghc-options:
     -Wall
     -Wno-incomplete-uni-patterns

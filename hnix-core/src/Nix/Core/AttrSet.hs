@@ -31,9 +31,24 @@ module Nix.Core.AttrSet
   , foldlWithKey'
   , filterWithKey
   , alterF
+    -- * Lens operations
+  , hashAt
     -- * Re-exports for convenience
   , module Nix.Types.VarName
   ) where
 
+import Relude (Functor, Maybe, flip)
 import Nix.AttrSet.Sig
 import Nix.Types.VarName (VarName, mkVarName, varNameText)
+
+-- | Lens for accessing a specific key in an AttrSet.
+-- Returns Nothing if the key is not present.
+-- Setting to Nothing deletes the key, setting to Just v inserts/updates.
+hashAt
+  :: Functor f
+  => VarName
+  -> (Maybe v -> f (Maybe v))
+  -> AttrSet v
+  -> f (AttrSet v)
+hashAt = flip alterF
+{-# INLINE hashAt #-}
