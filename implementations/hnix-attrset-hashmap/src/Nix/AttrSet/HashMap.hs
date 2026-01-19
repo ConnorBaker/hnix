@@ -48,6 +48,7 @@ import qualified Data.Aeson as Aeson
 import           Data.Aeson (ToJSON(..), FromJSON(..))
 import qualified Data.Binary as Binary
 import           Data.Binary (Binary)
+import           Data.Data (Data(..), mkNoRepType)
 import           Data.HashMap.Strict ()
 import qualified Data.HashMap.Strict as HM
 import           Control.DeepSeq ()
@@ -106,6 +107,16 @@ instance ToJSON a => ToJSON (AttrSet a) where
 instance FromJSON a => FromJSON (AttrSet a) where
   parseJSON v = AttrSet <$> Aeson.parseJSON v
   {-# INLINE parseJSON #-}
+
+-- | Data instance for AttrSet - enables generic programming (SYB).
+-- Represents AttrSet as an abstract type with list-based construction.
+instance (Data a, Typeable a) => Data (AttrSet a) where
+  gfoldl f z (AttrSet m) = z (AttrSet . HM.fromList) `f` HM.toList m
+  gunfold k z _ = k (z (AttrSet . HM.fromList))
+  toConstr _ = error "toConstr: AttrSet is abstract"
+  dataTypeOf _ = mkNoRepType "Nix.AttrSet.HashMap.AttrSet"
+  {-# INLINE gfoldl #-}
+  {-# INLINE gunfold #-}
 
 -- * Core operations
 

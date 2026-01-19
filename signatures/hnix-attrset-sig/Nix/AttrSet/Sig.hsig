@@ -10,6 +10,7 @@ import Codec.Serialise (Serialise)
 import Control.DeepSeq (NFData)
 import Data.Aeson (ToJSON, FromJSON)
 import Data.Binary (Binary)
+import Data.Data (Data, Typeable)
 import Data.Hashable (Hashable)
 
 -- | Abstract attribute set type.
@@ -108,3 +109,4 @@ instance Serialise a => Serialise (AttrSet a)
 instance Binary a => Binary (AttrSet a)
 instance ToJSON a => ToJSON (AttrSet a)
 instance FromJSON a => FromJSON (AttrSet a)
+instance (Data a, Typeable a) => Data (AttrSet a)
