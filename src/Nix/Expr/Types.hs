@@ -23,6 +23,7 @@
 -- (additiona info for dev): Big use of TemplateHaskell in the module requires proper (top-down) organization of declarations.
 module Nix.Expr.Types
   ( module Nix.Expr.Types
+  , module Nix.Types.VarName  -- Re-export VarName from hnix-types
   , SourcePos(..)
   , unPos
   , mkPos
@@ -32,8 +33,10 @@ where
 import           Nix.Prelude
 import qualified Codec.Serialise               as Serialise
 import           Codec.Serialise                ( Serialise )
-import           Symbolize                      ( Symbol )
-import qualified Symbolize
+-- VarName is now imported from hnix-types for Backpack compatibility
+import           Nix.Types.VarName
+-- AttrSet operations from hnix-core (instantiated via Backpack)
+import qualified Nix.Core.AttrSet              as CoreAttrSet
 import           Control.DeepSeq                ( NFData1(..) )
 import           Data.Aeson
 import           Data.Aeson.Types               ( toJSONKeyText )
@@ -191,84 +194,15 @@ instance FromJSON NSourcePos
 --   * Types in this section
 --   * Fixpoint nature
 
--- ** newtype VarName
-
-newtype VarName = VarName { getVarNameSymbol :: Symbol }
-  deriving stock (Generic)
-  deriving newtype (Eq, Ord, NFData, Hashable)
-
--- | Create a VarName from Text by interning it as a Symbol.
--- O(log n) where n is the number of unique symbols.
-mkVarName :: Text -> VarName
-mkVarName = VarName . Symbolize.intern
-{-# INLINABLE mkVarName #-}
-
--- | Extract the Text from a VarName.
--- O(1) operation.
-varNameText :: VarName -> Text
-varNameText = Symbolize.unintern . getVarNameSymbol
-{-# INLINABLE varNameText #-}
-
-instance IsString VarName where
-  fromString = mkVarName . fromString
-
-instance ToString VarName where
-  toString = toString . varNameText
-
-instance Show VarName where
-  show v = "VarName " <> show (varNameText v)
-
-instance Read VarName where
-  readPrec = parens $ Text.Read.prec 10 $ do
-    Text.Read.Ident "VarName" <- lexP
-    t <- Text.Read.readPrec
-    pure (mkVarName t)
-
--- Custom Serialise instance: serialize as Text
-instance Serialise VarName where
-  encode = Serialise.encode . varNameText
-  decode = mkVarName <$> Serialise.decode
-
--- Custom Binary instance: serialize as Text
-instance Binary VarName where
-  put = Binary.put . varNameText
-  get = mkVarName <$> Binary.get
+-- VarName is now imported from Nix.Types.VarName (hnix-types)
+-- This enables Backpack integration with hnix-core
 
 -- Binary instance for HashMap (serialize via sorted list for determinism)
 instance (Binary k, Binary v, Eq k, Hashable k, Ord k) => Binary (HashMap k v) where
   put = Binary.put . sortOn fst . HM.toList
   get = HM.fromList <$> Binary.get
 
--- Custom JSON instances: serialize as Text
-instance ToJSON VarName where
-  toJSON = toJSON . varNameText
-  toEncoding = toEncoding . varNameText
-
-instance FromJSON VarName where
-  parseJSON = fmap mkVarName . parseJSON
-
--- Key instances for HashMap serialization
-instance ToJSONKey VarName where
-  toJSONKey = toJSONKeyText varNameText
-
-instance FromJSONKey VarName where
-  fromJSONKey = FromJSONKeyText mkVarName
-
--- Data instance needs manual implementation since Symbol doesn't have Data
-instance Data VarName where
-  gfoldl k z v = z mkVarName `k` varNameText v
-  gunfold k z _ = k (z mkVarName)
-  toConstr _ = varNameConstr
-  dataTypeOf _ = varNameDataType
-
-varNameConstr :: Constr
-varNameConstr = mkConstr varNameDataType "VarName" [] Data.Data.Prefix
-
-varNameDataType :: DataType
-varNameDataType = mkDataType "Nix.Expr.Types.VarName" [varNameConstr]
-
--- TH Lift instance: generate code that uses mkVarName
-instance TH.Lift VarName where
+-- TH Lift instance for VarName is provided by hnix-types
   lift v = [| mkVarName $(TH.lift (varNameText v)) |]
   liftTyped v = [|| mkVarName $$(TH.liftTyped (varNameText v)) ||]
 

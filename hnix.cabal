@@ -1,4 +1,4 @@
-cabal-version:  2.2
+cabal-version:  3.0
 name:           hnix
 version:        0.17.0
 synopsis:       Haskell implementation of the Nix language
@@ -387,6 +387,13 @@ common shared
 
 library
   import: shared
+  -- Backpack instantiation: hnix-core uses abstract AttrSet and NixList
+  -- which we instantiate with HashMap and Vector implementations
+  mixins:
+    hnix-core
+      requires
+        (Nix.AttrSet.Sig as Nix.AttrSet.HashMap,
+         Nix.List.Sig as Nix.List.Vector)
   exposed-modules:
     Nix
     Nix.Prelude
@@ -452,6 +459,11 @@ library
   build-depends:
       aeson >= 2.0
     , array >= 0.4
+    -- Backpack packages for abstract data structures
+    , hnix-types
+    , hnix-core
+    , hnix-attrset-hashmap
+    , hnix-list-vector
     , base16-bytestring >= 0.1.1
     , binary >= 0.8.5
     , bytestring >= 0.10.8
