@@ -35,13 +35,8 @@ import qualified Codec.Serialise               as Serialise
 import           Codec.Serialise                ( Serialise )
 -- VarName is now imported from hnix-types for Backpack compatibility
 import           Nix.Types.VarName
--- AttrSet operations from hnix-core are available but not yet used
--- The abstract type lacks some instances (Ord, Data, Serialise, etc.)
--- needed for deriving on Params and other types.
-import qualified Nix.Core.AttrSet              as CoreAttrSet
 import           Control.DeepSeq                ( NFData1(..) )
 import           Data.Aeson
-import           Data.Aeson.Types               ( toJSONKeyText )
 import qualified Data.Binary                   as Binary
 import           Data.Binary                    ( Binary )
 import           Data.Data
@@ -52,8 +47,6 @@ import qualified Data.HashMap.Strict           as HM
 import qualified Data.Set                      as Set
 import qualified Data.List.NonEmpty            as NE
 import qualified Text.Show
-import qualified Text.Read
-import           Text.Read                      ( parens, lexP )
 import           Data.Traversable               ( fmapDefault, foldMapDefault )
 import           GHC.Generics
 import qualified Language.Haskell.TH            as TH

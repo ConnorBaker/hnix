@@ -6,7 +6,10 @@
 signature Nix.AttrSet.Sig where
 
 import Nix.Types.VarName (VarName)
+import Codec.Serialise (Serialise)
 import Control.DeepSeq (NFData)
+import Data.Aeson (ToJSON, FromJSON)
+import Data.Binary (Binary)
 import Data.Hashable (Hashable)
 
 -- | Abstract attribute set type.
@@ -94,8 +97,14 @@ instance Functor AttrSet
 instance Foldable AttrSet
 instance Traversable AttrSet
 instance Eq a => Eq (AttrSet a)
+instance Ord a => Ord (AttrSet a)
 instance Show a => Show (AttrSet a)
+instance Read a => Read (AttrSet a)
 instance Semigroup (AttrSet a)
 instance Monoid (AttrSet a)
 instance NFData a => NFData (AttrSet a)
 instance Hashable a => Hashable (AttrSet a)
+instance Serialise a => Serialise (AttrSet a)
+instance Binary a => Binary (AttrSet a)
+instance ToJSON a => ToJSON (AttrSet a)
+instance FromJSON a => FromJSON (AttrSet a)

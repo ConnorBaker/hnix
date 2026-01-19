@@ -15,8 +15,11 @@ library
     Nix.AttrSet.Sig
   build-depends:
       base >= 4.12 && < 5
+    , aeson >= 2.0
+    , binary >= 0.8
     , deepseq >= 1.4.3
     , hashable >= 1.2.5
     , hnix-types
+    , serialise >= 0.2
   ghc-options:
     -Wall

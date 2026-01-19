@@ -42,10 +42,17 @@ module Nix.AttrSet.HashMap
 import           Relude hiding (empty, fromList, toList, null)
 import           Prelude ()
 import           Nix.Types.VarName (VarName)
+import qualified Codec.Serialise as Serialise
+import           Codec.Serialise (Serialise)
+import qualified Data.Aeson as Aeson
+import           Data.Aeson (ToJSON(..), FromJSON(..))
+import qualified Data.Binary as Binary
+import           Data.Binary (Binary)
 import           Data.HashMap.Strict ()
 import qualified Data.HashMap.Strict as HM
 import           Control.DeepSeq ()
 import           Data.Hashable ()
+import qualified Text.Read as Read
 
 -- | Concrete AttrSet type backed by HashMap.
 -- The newtype wrapper allows us to provide custom instances.
@@ -65,6 +72,40 @@ instance NFData a => NFData (AttrSet a) where
 instance Hashable a => Hashable (AttrSet a) where
   hashWithSalt s (AttrSet m) = hashWithSalt s (HM.toList m)
   {-# INLINE hashWithSalt #-}
+
+-- | Ord instance via sorted list comparison for deterministic ordering
+instance Ord a => Ord (AttrSet a) where
+  compare (AttrSet m1) (AttrSet m2) = compare (sortOn fst $ HM.toList m1) (sortOn fst $ HM.toList m2)
+  {-# INLINE compare #-}
+
+-- | Read instance via list parsing
+instance Read a => Read (AttrSet a) where
+  readsPrec d = map (\(l, r) -> (fromList l, r)) . Read.readsPrec d
+
+-- | Serialise via sorted list for deterministic serialization
+instance Serialise a => Serialise (AttrSet a) where
+  encode (AttrSet m) = Serialise.encode (sortOn fst $ HM.toList m)
+  decode = AttrSet . HM.fromList <$> Serialise.decode
+  {-# INLINE encode #-}
+  {-# INLINE decode #-}
+
+-- | Binary via sorted list for deterministic serialization
+instance Binary a => Binary (AttrSet a) where
+  put (AttrSet m) = Binary.put (sortOn fst $ HM.toList m)
+  get = AttrSet . HM.fromList <$> Binary.get
+  {-# INLINE put #-}
+  {-# INLINE get #-}
+
+-- | JSON serialization as object
+instance ToJSON a => ToJSON (AttrSet a) where
+  toJSON (AttrSet m) = Aeson.toJSON m
+  toEncoding (AttrSet m) = Aeson.toEncoding m
+  {-# INLINE toJSON #-}
+  {-# INLINE toEncoding #-}
+
+instance FromJSON a => FromJSON (AttrSet a) where
+  parseJSON v = AttrSet <$> Aeson.parseJSON v
+  {-# INLINE parseJSON #-}
 
 -- * Core operations
 
