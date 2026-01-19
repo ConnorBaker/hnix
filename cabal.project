@@ -17,6 +17,8 @@ packages:
   ./signatures/hnix-list-sig
   ./implementations/hnix-attrset-hashmap
   ./implementations/hnix-list-vector
+  ./hnix-core
+  ./hnix-instantiated
   -- hnix-store packages
   ./hnix-store/hnix-store-core
   ./hnix-store/hnix-store-db
