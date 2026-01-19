@@ -4,14 +4,15 @@
 {-# language DefaultSignatures #-}
 {-# language FunctionalDependencies #-}
 {-# language GeneralizedNewtypeDeriving #-}
+{-# language TypeFamilies #-}
 
 module Nix.Scope where
 
 import           Nix.Prelude
-import qualified Data.HashMap.Strict           as HM
 import qualified Text.Show
 import           Lens.Family2
 import           Nix.Expr.Types
+import qualified Nix.Core.AttrSet              as A
 import qualified GHC.Clock                     as Clock
 
 -- | Performance note on scope representation (2025-01):
@@ -44,11 +45,63 @@ newtype Scope a = Scope (AttrSet a)
     , Read, Hashable
     , Semigroup, Monoid
     , Functor, Foldable, Traversable
-    , One
     )
 
+-- | One instance for creating singleton scopes.
+-- Note: relude's One typeclass allows @one (k, v) :: Scope a@
+instance One (Scope a) where
+  type OneItem (Scope a) = (VarName, a)
+  one (k, v) = Scope (A.singleton k v)
+
 instance Show (Scope a) where
-  show (Scope m) = show $ HM.keys m
+  show (Scope m) = show $ A.keys m
+
+-- | Create a Scope from a list of key-value pairs.
+scopeFromList :: [(VarName, a)] -> Scope a
+scopeFromList = Scope . A.fromList
+{-# INLINE scopeFromList #-}
+
+-- | Convert a Scope to a list of key-value pairs.
+scopeToList :: Scope a -> [(VarName, a)]
+scopeToList (Scope m) = A.toList m
+{-# INLINE scopeToList #-}
+
+-- | Look up a key in a single Scope.
+scopeLookupSingle :: VarName -> Scope a -> Maybe a
+scopeLookupSingle k (Scope m) = A.lookup k m
+{-# INLINE scopeLookupSingle #-}
+
+-- | Get all keys from a Scope.
+scopeKeys :: Scope a -> [VarName]
+scopeKeys (Scope m) = A.keys m
+{-# INLINE scopeKeys #-}
+
+-- | Extract the underlying AttrSet from a Scope.
+unScope :: Scope a -> AttrSet a
+unScope (Scope m) = m
+{-# INLINE unScope #-}
+
+-- | AttrSet operations re-exported for modules that can't import hnix-core directly.
+-- These are needed by the executable (main/Repl.hs).
+attrSetFromList :: [(VarName, a)] -> AttrSet a
+attrSetFromList = A.fromList
+{-# INLINE attrSetFromList #-}
+
+attrSetToList :: AttrSet a -> [(VarName, a)]
+attrSetToList = A.toList
+{-# INLINE attrSetToList #-}
+
+attrSetLookup :: VarName -> AttrSet a -> Maybe a
+attrSetLookup = A.lookup
+{-# INLINE attrSetLookup #-}
+
+attrSetInsert :: VarName -> a -> AttrSet a -> AttrSet a
+attrSetInsert = A.insert
+{-# INLINE attrSetInsert #-}
+
+attrSetKeys :: AttrSet a -> [VarName]
+attrSetKeys = A.keys
+{-# INLINE attrSetKeys #-}
 
 scopeLookup :: VarName -> [Scope a] -> Maybe a
 scopeLookup key = foldr fun Nothing
@@ -57,7 +110,7 @@ scopeLookup key = foldr fun Nothing
     :: Scope a
     -> Maybe a
     -> Maybe a
-  fun (Scope m) rest = HM.lookup key m <|> rest
+  fun (Scope m) rest = A.lookup key m <|> rest
 
 -- | Like scopeLookup but also returns (total depth, scopes searched before finding)
 --   If not found, scopes searched = total depth
@@ -67,7 +120,7 @@ scopeLookupWithDepth key = go 0
  where
   go !depth [] = (Nothing, depth, depth)
   go !depth (Scope m : rest) =
-    case HM.lookup key m of
+    case A.lookup key m of
       Just v  -> (Just v, depth + 1 + length rest, depth + 1)
       Nothing -> go (depth + 1) rest
 
@@ -196,13 +249,16 @@ lookupVarReader k =
         foldr
           (\ weakscope rest ->
             do
-              mres' <- HM.lookup k . coerce @(Scope a) <$> weakscope
+              mres' <- scopeLookupSingle k <$> weakscope
               case mres' of
                 Just res -> pure $ pure res
                 Nothing -> rest
           )
           (pure Nothing)
           ws
+ where
+  scopeLookupSingle :: VarName -> Scope a -> Maybe a
+  scopeLookupSingle key (Scope m) = A.lookup key m
 
 withScopes
   :: Scoped a m
@@ -242,10 +298,13 @@ lookupVarReaderWithInfo k = do
   let (val, info) = result
   pure (val, info, end - start)
  where
+  scopeLookupSingle :: VarName -> Scope a -> Maybe a
+  scopeLookupSingle key (Scope m) = A.lookup key m
+
   searchDynamic _lexCount _dynSearched totalDepth [] =
     pure (Nothing, LookupMiss totalDepth)
   searchDynamic lexCount dynSearched totalDepth (weakscope : rest) = do
-    mres' <- HM.lookup k . coerce @(Scope a) <$> weakscope
+    mres' <- scopeLookupSingle k <$> weakscope
     case mres' of
       Just v  -> pure (Just v, DynamicHit totalDepth (lexCount + dynSearched + 1))
       Nothing -> searchDynamic lexCount (dynSearched + 1) totalDepth rest

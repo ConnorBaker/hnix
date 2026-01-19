@@ -21,12 +21,12 @@ module Inspection.Scope
 
 import           Relude
 
-import qualified Data.HashMap.Strict           as HM
 import           Test.Inspection
 
 import           Nix.Expr.Types                 ( VarName )
 import           Nix.Scope                      ( Scope(..), Scopes(..)
                                                 , scopeLookup, scopeLookupWithDepth
+                                                , scopeFromList, scopeLookupSingle
                                                 )
 
 
@@ -51,7 +51,7 @@ testScopeLookupWithDepth = scopeLookupWithDepth
 
 -- | Test creating a Scope from a list of pairs.
 testScopeFromList :: [(VarName, a)] -> Scope a
-testScopeFromList = Scope . HM.fromList
+testScopeFromList = scopeFromList
 {-# NOINLINE testScopeFromList #-}
 
 -- | Test pushing a scope onto a scope list.
@@ -66,7 +66,7 @@ testScopePush s ss = s : ss
 expectedScopeLookup :: VarName -> [Scope a] -> Maybe a
 expectedScopeLookup key = foldr fun Nothing
   where
-    fun (Scope m) rest = HM.lookup key m <|> rest
+    fun scope rest = scopeLookupSingle key scope <|> rest
 {-# NOINLINE expectedScopeLookup #-}
 
 

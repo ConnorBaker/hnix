@@ -20,6 +20,7 @@ import           Control.Monad.Fix
 import           Control.Monad.Ref
 import           Control.Monad.ST
 import qualified Data.HashMap.Strict           as HM
+import qualified Nix.Core.AttrSet              as A
 -- Plese, use NonEmpty
 import           Data.List                      ( intersect )
 import qualified Data.List.NonEmpty            as NE
@@ -214,7 +215,7 @@ merge context = go
     (TSet (Just l), TSet (Just r)) -> do
       hm <-
         sequenceA $
-          HM.intersectionWith
+          A.intersectionWith
             (\ i j ->
               do
                 i'' <- i
@@ -323,7 +324,7 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
       f <- mkSymbolic1 TPath
       l <- mkSymbolic1 $ TConstant $ one TInt
       c <- mkSymbolic1 $ TConstant $ one TInt
-      mkSymbolic1 $ TSet . pure $ HM.fromList [("file", f), ("line", l), ("col", c)]
+      mkSymbolic1 $ TSet . pure $ A.fromList [(mkVarName "file", f), (mkVarName "line", l), (mkVarName "col", c)]
 
   evalConstant c = mkSymbolic1 $ fun c
    where

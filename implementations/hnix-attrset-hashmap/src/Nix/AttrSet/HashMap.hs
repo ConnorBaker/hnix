@@ -1,5 +1,7 @@
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TemplateHaskellQuotes #-}
 {-# LANGUAGE TypeFamilies #-}
 
 -- | HashMap implementation of the AttrSet signature.
@@ -21,7 +23,9 @@ module Nix.AttrSet.HashMap
   -- Bulk operations
   , union
   , unionWith
+  , insertWith
   , intersection
+  , intersectionWith
   , difference
   -- Conversion
   , fromList
@@ -36,10 +40,11 @@ module Nix.AttrSet.HashMap
   , traverseWithKey
   , foldlWithKey'
   , filterWithKey
+  , mapMaybe
   , alterF
   ) where
 
-import           Relude hiding (empty, fromList, toList, null)
+import           Relude hiding (empty, fromList, toList, null, mapMaybe)
 import           Prelude ()
 import           Nix.Types.VarName (VarName)
 import qualified Codec.Serialise as Serialise
@@ -48,14 +53,21 @@ import qualified Data.Aeson as Aeson
 import           Data.Aeson (ToJSON(..), FromJSON(..), ToJSON1(..), FromJSON1(..))
 import qualified Data.Binary as Binary
 import           Data.Binary (Binary)
-import           Data.Data (Data(..), mkNoRepType)
+import           Data.Data (Data(..), Constr, DataType, mkConstr, mkDataType, Fixity(..))
 import           Data.HashMap.Strict ()
 import qualified Data.HashMap.Strict as HM
 import           Control.DeepSeq (NFData1(..))
 import           Data.Functor.Classes (Eq1(..), Ord1(..), Show1(..), Read1(..))
 import           Data.Hashable ()
 import           Data.Hashable.Lifted (Hashable1(..))
+import           Data.Functor.WithIndex (FunctorWithIndex(..))
+import           Data.Foldable.WithIndex (FoldableWithIndex(..))
+import           Data.Traversable.WithIndex (TraversableWithIndex(..))
+import           Data.Semialign (Semialign(..), Align(..))
+import           Data.Semialign.Indexed (SemialignWithIndex(..))
 import qualified Text.Read as Read
+import qualified Language.Haskell.TH.Syntax as TH
+import           Language.Haskell.TH.Syntax (Lift(..), Exp(..), unsafeCodeCoerce)
 
 -- | Concrete AttrSet type backed by HashMap.
 -- The newtype wrapper allows us to provide custom instances.
@@ -68,6 +80,21 @@ instance Traversable AttrSet where
   traverse f (AttrSet m) = AttrSet <$> traverse f m
   {-# INLINE traverse #-}
 
+-- | FunctorWithIndex instance for indexed mapping
+instance FunctorWithIndex VarName AttrSet where
+  imap f (AttrSet m) = AttrSet (imap f m)
+  {-# INLINE imap #-}
+
+-- | FoldableWithIndex instance for indexed folding
+instance FoldableWithIndex VarName AttrSet where
+  ifoldMap f (AttrSet m) = ifoldMap f m
+  {-# INLINE ifoldMap #-}
+
+-- | TraversableWithIndex instance for indexed traversal
+instance TraversableWithIndex VarName AttrSet where
+  itraverse f (AttrSet m) = AttrSet <$> itraverse f m
+  {-# INLINE itraverse #-}
+
 instance NFData a => NFData (AttrSet a) where
   rnf (AttrSet m) = rnf m
   {-# INLINE rnf #-}
@@ -75,6 +102,15 @@ instance NFData a => NFData (AttrSet a) where
 instance Hashable a => Hashable (AttrSet a) where
   hashWithSalt s (AttrSet m) = hashWithSalt s (HM.toList m)
   {-# INLINE hashWithSalt #-}
+
+-- | Lift instance for Template Haskell support.
+-- Uses fromList to avoid exposing the AttrSet constructor.
+-- We use liftData rather than a TH splice to ensure proper code generation.
+instance (Lift a, Typeable a, Data a) => Lift (AttrSet a) where
+  lift (AttrSet m) = do
+    listExpr <- TH.lift (HM.toList m)
+    pure $ AppE (VarE 'fromList) listExpr
+  liftTyped x = unsafeCodeCoerce (TH.lift x)
 
 -- | Ord instance via sorted list comparison for deterministic ordering
 instance Ord a => Ord (AttrSet a) where
@@ -111,12 +147,18 @@ instance FromJSON a => FromJSON (AttrSet a) where
   {-# INLINE parseJSON #-}
 
 -- | Data instance for AttrSet - enables generic programming (SYB).
--- Represents AttrSet as an abstract type with list-based construction.
+-- Uses list-based representation for proper lifting support.
+attrSetConstr :: Constr
+attrSetConstr = mkConstr attrSetDataType "AttrSet" [] Prefix
+
+attrSetDataType :: DataType
+attrSetDataType = mkDataType "Nix.AttrSet.HashMap.AttrSet" [attrSetConstr]
+
 instance (Data a, Typeable a) => Data (AttrSet a) where
   gfoldl f z (AttrSet m) = z (AttrSet . HM.fromList) `f` HM.toList m
   gunfold k z _ = k (z (AttrSet . HM.fromList))
-  toConstr _ = error "toConstr: AttrSet is abstract"
-  dataTypeOf _ = mkNoRepType "Nix.AttrSet.HashMap.AttrSet"
+  toConstr (AttrSet _) = attrSetConstr
+  dataTypeOf _ = attrSetDataType
   {-# INLINE gfoldl #-}
   {-# INLINE gunfold #-}
 
@@ -162,6 +204,21 @@ instance Hashable1 AttrSet where
   liftHashWithSalt h s (AttrSet m) = liftHashWithSalt h s m
   {-# INLINE liftHashWithSalt #-}
 
+-- | Semialign instance for alignment operations
+instance Semialign AttrSet where
+  align (AttrSet m1) (AttrSet m2) = AttrSet (align m1 m2)
+  {-# INLINE align #-}
+
+-- | Align instance (adds nil to Semialign)
+instance Align AttrSet where
+  nil = AttrSet HM.empty
+  {-# INLINE nil #-}
+
+-- | SemialignWithIndex instance for indexed alignment operations
+instance SemialignWithIndex VarName AttrSet where
+  ialignWith f (AttrSet m1) (AttrSet m2) = AttrSet (ialignWith f m1 m2)
+  {-# INLINE ialignWith #-}
+
 -- * Core operations
 
 empty :: AttrSet a
@@ -198,9 +255,17 @@ unionWith :: (a -> a -> a) -> AttrSet a -> AttrSet a -> AttrSet a
 unionWith f (AttrSet m1) (AttrSet m2) = AttrSet (HM.unionWith f m1 m2)
 {-# INLINE unionWith #-}
 
+insertWith :: (a -> a -> a) -> VarName -> a -> AttrSet a -> AttrSet a
+insertWith f k v (AttrSet m) = AttrSet (HM.insertWith f k v m)
+{-# INLINE insertWith #-}
+
 intersection :: AttrSet a -> AttrSet b -> AttrSet a
 intersection (AttrSet m1) (AttrSet m2) = AttrSet (HM.intersection m1 m2)
 {-# INLINE intersection #-}
+
+intersectionWith :: (a -> b -> c) -> AttrSet a -> AttrSet b -> AttrSet c
+intersectionWith f (AttrSet m1) (AttrSet m2) = AttrSet (HM.intersectionWith f m1 m2)
+{-# INLINE intersectionWith #-}
 
 difference :: AttrSet a -> AttrSet b -> AttrSet a
 difference (AttrSet m1) (AttrSet m2) = AttrSet (HM.difference m1 m2)
@@ -251,6 +316,10 @@ foldlWithKey' f z (AttrSet m) = HM.foldlWithKey' f z m
 filterWithKey :: (VarName -> a -> Bool) -> AttrSet a -> AttrSet a
 filterWithKey p (AttrSet m) = AttrSet (HM.filterWithKey p m)
 {-# INLINE filterWithKey #-}
+
+mapMaybe :: (a -> Maybe b) -> AttrSet a -> AttrSet b
+mapMaybe f (AttrSet m) = AttrSet (HM.mapMaybe f m)
+{-# INLINE mapMaybe #-}
 
 alterF :: Functor f => (Maybe a -> f (Maybe a)) -> VarName -> AttrSet a -> f (AttrSet a)
 alterF f k (AttrSet m) = AttrSet <$> HM.alterF f k m

@@ -34,7 +34,7 @@ import           Nix.Prelude
 import qualified Data.Vector                   as V
 import           GHC.Err                        ( errorWithoutStackTrace )
 import           Data.Fix                       ( Fix )
-import qualified Data.HashMap.Strict           as HM
+import qualified Nix.Core.AttrSet              as A
 import qualified Data.Text                     as Text
 import qualified Data.Text.Read                as Text
 import           Nix.Builtins
@@ -134,7 +134,7 @@ evaluateExpression mpath evaluator handler expr =
     f' <- demand f
     val <-
       case f' of
-        NVClosure _ g -> g $ NVSet mempty $ HM.fromList args
+        NVClosure _ g -> g $ NVSet mempty $ A.fromList args
         _             -> pure f
     processResult handler val
  where
@@ -169,7 +169,7 @@ processResult h val =
           case (k, v') of
             (Text.decimal . varNameText -> Right (n,""), NVList xs) -> processKeys ks $ xs V.! n
             (_,         NVSet _ xs) ->
-              case HM.lookup k xs of
+              case A.lookup k xs of
                 Nothing -> errorWithoutStackTrace $ "Set does not contain key ''" <> show k <> "''."
                 Just x  -> processKeys ks x
             (_, _) -> errorWithoutStackTrace $ "Expected a set or list for selector '" <> show k <> "', but got: " <> show v

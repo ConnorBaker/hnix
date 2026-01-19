@@ -19,6 +19,7 @@ import           Control.Monad.Ref              ( MonadRef(readRef) )
 import           Control.Monad.Catch
 import           System.IO                      ( hPutStrLn, hIsTerminalDevice )
 import qualified Data.HashMap.Strict           as HM
+import           Nix.Scope                      ( attrSetLookup, attrSetToList )
 import           Data.Time
 import qualified Data.Text                     as Text
 import qualified Data.Text.IO                  as Text.IO
@@ -125,7 +126,7 @@ evalExprToDrvPath expr = do
       val <- withNixContext mempty $ nixEvalExprLocT mempty parsed
       demanded <- demand val
       case demanded of
-        NVSet _ attrs -> case HM.lookup "drvPath" attrs of
+        NVSet _ attrs -> case attrSetLookup (mkVarName "drvPath") attrs of
           Just drvPathVal -> do
             drvPathStr <- ignoreContext <$> (fromValue drvPathVal :: StdM prov cfg m NixString)
             pure $ coerce $ toString drvPathStr
@@ -381,7 +382,7 @@ main' opts@Options{..} =
                     (pure . pure . Free)
                     nv
                 )
-                (sortWith fst $ HM.toList $ HM.mapKeys varNameText s)
+                (sortWith fst [(varNameText k, v) | (k, v) <- attrSetToList s])
          where
           filterEntry path k = case (path, k) of
             ("stdenv", "stdenv"          ) -> (True , True )

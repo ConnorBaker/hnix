@@ -17,11 +17,11 @@ module Nix.Convert where
 
 import           Nix.Prelude
 import           Control.Monad.Free
-import qualified Data.HashMap.Strict           as HM
 import           Nix.Options                   ( Options )
 import           Nix.Atoms
 import           Nix.Effects
 import           Nix.Expr.Types
+import qualified Nix.Core.AttrSet              as A
 import           Nix.FileType                 ( FileType(..) )
 import           Nix.Frames
 import           Nix.String
@@ -238,7 +238,7 @@ instance ( Convertible e t f m
         maybe
           stub
           fromValueMay
-          (HM.lookup "outPath" s)
+          (A.lookup "outPath" s)
       _ -> stub
 
   --  2021-07-18: NOTE: There may be cases where conversion wrongly marks the content to have a context.
@@ -280,7 +280,7 @@ instance ( Convertible e t f m
         maybe
           stub
           (fromValueMay @Path)
-          (HM.lookup "outPath" s)
+          (A.lookup "outPath" s)
       _ -> stub
 
   fromValue = fromMayToValue TPath
@@ -456,7 +456,7 @@ instance Convertible e t f m
     f' <- toValue $ mkNixStringWithoutContext $ fromString $ coerce f
     l' <- toValue $ unPos $ coerce l
     c' <- toValue $ unPos $ coerce c
-    let pos = HM.fromList [("file" :: VarName, f'), ("line", l'), ("column", c')]
+    let pos = A.fromList [("file" :: VarName, f'), ("line", l'), ("column", c')]
     pure $ NVSet' mempty pos
 
 -- | With 'ToValue', we can always act recursively
@@ -518,7 +518,7 @@ instance Convertible e t f m
         (pure Nothing)
         (fmap pure . toValue)
         ts
-    pure $ NVSet' mempty $ HM.fromList $ catMaybes
+    pure $ NVSet' mempty $ A.fromList $ catMaybes
       [ ("path"      ,) <$> path
       , ("allOutputs",) <$> allOutputs
       , ("outputs"   ,) <$> outputs

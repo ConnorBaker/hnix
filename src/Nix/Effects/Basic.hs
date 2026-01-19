@@ -10,8 +10,9 @@ import           GHC.Exception                  ( ErrorCall(ErrorCall) )
 import           Control.Monad                  ( foldM )
 import qualified Control.Monad.State           as State
 import qualified "crypton" Crypto.Hash        as Crypto.Hash
-import qualified Data.HashMap.Strict           as HM
 import           Data.Dependent.Sum            ( DSum((:=>)) )
+import qualified Data.HashMap.Strict           as HM
+import qualified Nix.Core.AttrSet              as A
 import           Data.Vector                    ( Vector )
 import           Data.List.Split                ( splitOn )
 import qualified Data.Text                     as Text
@@ -164,11 +165,11 @@ findPathBy finder ls name =
     case mp of
       Just p -> pure $ pure p
       Nothing -> do
-        (s :: HashMap VarName (NValue t f m)) <- fromValue =<< demand nv
+        (s :: AttrSet (NValue t f m)) <- fromValue =<< demand nv
         p <- resolvePath s
         path <- fromValue =<< demand p
 
-        case HM.lookup "prefix" s of
+        case A.lookup "prefix" s of
           Nothing -> tryPath path mempty
           Just nv' -> do
             mns <- fromValueMay @NixString =<< demand nv'
@@ -185,12 +186,12 @@ findPathBy finder ls name =
     finder $ p <///> joinPath ns
   tryPath p _ = finder $ p <///> name
 
-  resolvePath :: HashMap VarName (NValue t f m) -> m (NValue t f m)
+  resolvePath :: AttrSet (NValue t f m) -> m (NValue t f m)
   resolvePath s =
-    case HM.lookup "path" s of
+    case A.lookup "path" s of
       Just v -> pure v
       Nothing ->
-        case HM.lookup "uri" s of
+        case A.lookup "uri" s of
           Just uriVal -> defer . fetchTarball $ uriVal
           Nothing ->
             throwError $ ErrorCall $ "__nixPath must be a list of attr sets with 'path' elements, but received: " <> show s
@@ -203,12 +204,12 @@ fetchTarball
 fetchTarball =
   \case
     NVSet _ s -> do
-      urlVal <- case HM.lookup "url" s of
+      urlVal <- case A.lookup "url" s of
         Nothing -> throwError $ ErrorCall "builtins.fetchTarball: Missing url attribute"
         Just v -> pure v
       url <- fromValue =<< demand urlVal
-      mShaVal <- traverse (fromValue <=< demand) (HM.lookup "sha256" s <|> HM.lookup "hash" s)
-      mNameVal <- traverse (fromValue <=< demand) (HM.lookup "name" s)
+      mShaVal <- traverse (fromValue <=< demand) (A.lookup "sha256" s <|> A.lookup "hash" s)
+      mNameVal <- traverse (fromValue <=< demand) (A.lookup "name" s)
       fetch url mShaVal mNameVal
     NVStr ns -> fetch (ignoreContext ns) Nothing Nothing
     v -> throwError $ ErrorCall $ "builtins.fetchTarball: Expected URI or set, got " <> show v
@@ -390,7 +391,7 @@ fetchTree =
   in
   \case
     NVSet _ s -> do
-      typeVal <- case HM.lookup "type" s of
+      typeVal <- case A.lookup "type" s of
         Nothing -> throwError $ ErrorCall "builtins.fetchTree: missing type"
         Just v -> pure v
       typ <- fromValue =<< demand typeVal
@@ -436,25 +437,25 @@ fetchGitFromSet
   -> AttrSet (NValue t f m)
   -> m (NValue t f m)
 fetchGitFromSet mode s = do
-  urlVal <- case HM.lookup "url" s of
+  urlVal <- case A.lookup "url" s of
     Nothing -> throwError $ ErrorCall "builtins.fetchGit: Missing url attribute"
     Just v -> pure v
   url <- extractUrlLike =<< demand urlVal
-  mNameVal <- traverse (fromValue <=< demand) (HM.lookup "name" s)
+  mNameVal <- traverse (fromValue <=< demand) (A.lookup "name" s)
   when (not (fgAllowName mode) && isJust mNameVal) $
     throwError $ ErrorCall "builtins.fetchTree: argument 'name' isn’t supported"
-  mRevVal <- traverse (fromValue <=< demand) (HM.lookup "rev" s)
-  mRefVal <- traverse (fromValue <=< demand) (HM.lookup "ref" s)
-  mSubVal <- traverse (fromValue <=< demand) (HM.lookup "submodules" s)
-  mShallowVal <- traverse (fromValue <=< demand) (HM.lookup "shallow" s)
-  mExportIgnoreVal <- traverse (fromValue <=< demand) (HM.lookup "exportIgnore" s)
-  mAllRefsVal <- traverse (fromValue <=< demand) (HM.lookup "allRefs" s)
-  mLfsVal <- traverse (fromValue <=< demand) (HM.lookup "lfs" s)
-  mNarHashVal <- traverse (fromValue <=< demand) (HM.lookup "narHash" s)
-  mVerifyCommitVal <- traverse (fromValue <=< demand) (HM.lookup "verifyCommit" s)
-  mKeyTypeVal <- traverse (fromValue <=< demand) (HM.lookup "keytype" s)
-  mPublicKeyVal <- traverse (fromValue <=< demand) (HM.lookup "publicKey" s)
-  mPublicKeysVal <- traverse (fromValue @[NValue t f m] <=< demand) (HM.lookup "publicKeys" s)
+  mRevVal <- traverse (fromValue <=< demand) (A.lookup "rev" s)
+  mRefVal <- traverse (fromValue <=< demand) (A.lookup "ref" s)
+  mSubVal <- traverse (fromValue <=< demand) (A.lookup "submodules" s)
+  mShallowVal <- traverse (fromValue <=< demand) (A.lookup "shallow" s)
+  mExportIgnoreVal <- traverse (fromValue <=< demand) (A.lookup "exportIgnore" s)
+  mAllRefsVal <- traverse (fromValue <=< demand) (A.lookup "allRefs" s)
+  mLfsVal <- traverse (fromValue <=< demand) (A.lookup "lfs" s)
+  mNarHashVal <- traverse (fromValue <=< demand) (A.lookup "narHash" s)
+  mVerifyCommitVal <- traverse (fromValue <=< demand) (A.lookup "verifyCommit" s)
+  mKeyTypeVal <- traverse (fromValue <=< demand) (A.lookup "keytype" s)
+  mPublicKeyVal <- traverse (fromValue <=< demand) (A.lookup "publicKey" s)
+  mPublicKeysVal <- traverse (fromValue @[NValue t f m] <=< demand) (A.lookup "publicKeys" s)
 
   let keyType =
         case mKeyTypeVal of
@@ -577,7 +578,7 @@ buildFetchGitAttrs mode args res = do
         , ("lastModifiedDate", lastModDateVal)
         ]
 
-  toValue (HM.fromList (attrsBase <> revAttrs <> dirtyAttrs <> lastModAttrs) :: AttrSet (NValue t f m))
+  toValue (A.fromList (attrsBase <> revAttrs <> dirtyAttrs <> lastModAttrs) :: AttrSet (NValue t f m))
 
 fetchGitToStore
   :: forall e t f m
@@ -1172,11 +1173,11 @@ parsePublicKeys defaultType mKey mKeysList = do
     v <- demand val
     case v of
       NVSet _ attrs -> do
-        keyVal <- case HM.lookup "key" attrs of
+        keyVal <- case A.lookup "key" attrs of
           Nothing -> throwError $ ErrorCall "builtins.fetchGit: publicKeys entry missing 'key'"
           Just keyVal' -> pure keyVal'
         keyText <- fromValue =<< demand keyVal
-        let typeVal = HM.lookup "type" attrs
+        let typeVal = A.lookup "type" attrs
         typ <- case typeVal of
           Nothing -> pure defaultType
           Just tv -> fromValue =<< demand tv

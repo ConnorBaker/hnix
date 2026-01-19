@@ -12,6 +12,7 @@ import qualified Data.HashMap.Strict           as HM
 import qualified Data.Aeson.Key                as AKM
 import qualified Data.Aeson.KeyMap             as AKM
 #endif
+import qualified Nix.Core.AttrSet              as A
 import           Nix.Atoms
 import           Nix.Effects
 import           Nix.Exec
@@ -60,7 +61,7 @@ toJSON = \case
   NVList l -> A.Array <$> traverse intoJson l
   NVSet pos m ->
     -- First check for __toString, then outPath, then normal object encoding
-    case HM.lookup (mkVarName "__toString") m of
+    case A.lookup (mkVarName "__toString") m of
       Just toStringFn -> do
         -- Call __toString with self (the set itself)
         -- callFunc handles demanding the thunk internally
@@ -74,10 +75,10 @@ toJSON = \case
    where
 #if MIN_VERSION_aeson(2,0,0)
     lkup = AKM.lookup
-    kmap = AKM.fromHashMap $ HM.mapKeys (AKM.fromText . varNameText) m
+    kmap = AKM.fromList [(AKM.fromText (varNameText k), v) | (k, v) <- A.toList m]
 #else
     lkup = HM.lookup
-    kmap = HM.mapKeys varNameText m
+    kmap = HM.fromList [(varNameText k, v) | (k, v) <- A.toList m]
 #endif
   NVPath p ->
     do

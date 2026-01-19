@@ -25,8 +25,8 @@ import           GHC.Exception                  ( ErrorCall(ErrorCall) )
 import           Control.Monad.Catch     hiding ( catchJust )
 import           Control.Monad.Fix
 import           Data.Fix
-import qualified Data.HashMap.Strict           as HM
 import qualified Data.List.NonEmpty            as NE
+import qualified Nix.Core.AttrSet              as A
 import qualified Data.Text                     as Text
 import           Nix.Atoms
 import           Nix.Cited
@@ -439,7 +439,7 @@ callFunc fun arg =
               Nothing -> f arg
               Just stats -> withBuiltinTiming stats (varNameText name) (f arg)
       NVClosure _params f -> f arg
-      (NVSet _ m) | Just f <- HM.lookup "__functor" m ->
+      (NVSet _ m) | Just f <- A.lookup "__functor" m ->
         (`callFunc` arg) =<< (`callFunc` fun') f
       _x -> throwError $ ErrorCall $ "Attempt to call non-function: " <> show _x
 
@@ -569,11 +569,11 @@ execBinaryOpForced' op lval rval =
       case (lval, rval) of
         (NVSet lp ls, NVSet rp rs)
           -- Fast paths: avoid allocation when one or both sets are empty
-          | HM.null ls && HM.null rs -> withProvCtx
+          | A.null ls && A.null rs -> withProvCtx
               (\scope span -> pure $ mkNVBinaryOpWithProvenance scope span op (pure lval) (pure rval) $ NVSet emptyPositionSet mempty)
               askInternedEmptySet
-          | HM.null ls -> wrapResult rval
-          | HM.null rs -> wrapResult lval
+          | A.null ls -> wrapResult rval
+          | A.null rs -> wrapResult lval
           | otherwise  -> wrapResult $ NVSet (rp <> lp) (rs <> ls)
         (NVSet _lp _ls, NVConstant NNull) -> wrapResult lval
         (NVConstant NNull, NVSet _rp _rs) -> wrapResult rval

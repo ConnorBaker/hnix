@@ -10,9 +10,8 @@ import           Control.Monad.Free             ( Free(Free) )
 import           Data.Char                      ( isAsciiLower, isAsciiUpper, isDigit )
 import           Data.Fix                       ( Fix(..)
                                                 , foldFix )
-import           Data.HashMap.Strict            ( toList )
-import qualified Data.HashMap.Strict           as HM
 import qualified Data.HashSet                  as HS
+import qualified Nix.Core.AttrSet              as A
 import qualified Data.List.NonEmpty            as NE
 import           Data.Text                      ( replace
                                                 , strip
@@ -417,8 +416,8 @@ valueToExpr = iterNValueByDiscardWith thk (Fix . phi)
   phi (NVStr'      ns    ) = NStr $ DoubleQuoted $ one $ Plain $ ignoreContext ns
   phi (NVList'     l     ) = NList (V.toList l)
   phi (NVSet'      p    s) = NSet mempty
-    [ NamedVar (one $ StaticKey k) v (fromMaybe nullPos $ (`HM.lookup` p) k)
-    | (k, v) <- sortWith fst $ toList s  -- Sort alphabetically like Nix
+    [ NamedVar (one $ StaticKey k) v (fromMaybe nullPos $ (`A.lookup` p) k)
+    | (k, v) <- sortWith fst $ A.toList s  -- Sort alphabetically like Nix
     ]
   phi (NVClosure'  _    _) = NSym "<closure>"
   phi (NVPath'     p     ) = NLiteralPath p
@@ -458,13 +457,13 @@ derivationDoc =
   \case
     NVSet _ s -> do
       let hasType =
-            case HM.lookup "type" s of
+            case A.lookup "type" s of
               Just (NVStr ty) -> ignoreContext ty == "derivation"
               _ -> False
-      let hasDrv = HM.member "drvPath" s
-      let hasOut = HM.member "outPath" s
+      let hasDrv = A.member "drvPath" s
+      let hasOut = A.member "outPath" s
       guard (hasType || (hasDrv && hasOut))
-      let mDrv = HM.lookup "drvPath" s >>= valueToText
+      let mDrv = A.lookup "drvPath" s >>= valueToText
       pure $
         case mDrv of
           Just drv -> "«derivation " <> pretty drv <> "»"
@@ -552,7 +551,7 @@ printNix =
     "{ " <>
       fold
         [ quoteKey k <> " = " <> v <> "; "
-        | (varNameText -> k, v) <- sort $ toList s
+        | (varNameText -> k, v) <- sort $ A.toList s
         ] <> "}"
    where
     -- Quote a key if it's not a valid Nix identifier, escaping special chars

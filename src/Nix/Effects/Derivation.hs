@@ -25,6 +25,7 @@ import           Data.Char                      ( isAscii
                                                 )
 import qualified Data.HashMap.Strict           as HM
 import qualified Data.HashSet                  as HS
+import qualified Nix.Core.AttrSet              as A
 import           Data.Foldable                  ( foldl )
 import qualified Data.Map.Strict               as Map
 import qualified Data.Set                      as Set
@@ -617,7 +618,7 @@ _setTreeExecutable path = do
 
 defaultDerivationStrict :: forall e t f m b. (MonadNix e t f m, MonadState (b, KeyMap Text) m) => NValue t f m -> m (NValue t f m)
 defaultDerivationStrict val = do
-    s <- HM.mapKeys varNameText <$> fromValue @(AttrSet (NValue t f m)) val
+    s <- HM.fromList . fmap (\(k, v) -> (varNameText k, v)) . A.toList <$> fromValue @(AttrSet (NValue t f m)) val
     (drv, ctx) <- runWithStringContextT' $ buildDerivationWithContext s
     drvName <- makeStorePathName $ name drv
     storeDir <- storeDirFromOptions
@@ -688,7 +689,7 @@ defaultDerivationStrict val = do
       attrSet = NVStr <$> HM.insert "drvPath" drvPathWithContext (Map.foldrWithKey HM.insert HM.empty outputsWithContext)
     -- TODO: Add location information for all the entries.
     --              here --v
-    pure $ NVSet emptyPositionSet $ HM.mapKeys mkVarName attrSet
+    pure $ NVSet emptyPositionSet $ A.fromList [(mkVarName k, v) | (k, v) <- HM.toList attrSet]
 
   where
 
@@ -812,8 +813,8 @@ buildDerivationWithContext drvAttrs = do
 
       env <- if useJson
         then do
-          jsonString :: NixString <- lift $ toJSONNixString $ NVSet mempty $ HM.mapKeys mkVarName $
-            deleteKeys [ "args", "__ignoreNulls", "__structuredAttrs" ] attrs
+          jsonString :: NixString <- lift $ toJSONNixString $ NVSet mempty $
+            A.fromList [(mkVarName k, v) | (k, v) <- HM.toList $ deleteKeys [ "args", "__ignoreNulls", "__structuredAttrs" ] attrs]
           rawString :: Text <- extractNixString jsonString
           pure $ one ("__json", rawString)
         else

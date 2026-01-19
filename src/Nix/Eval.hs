@@ -11,10 +11,11 @@ import           Control.Monad                  ( foldM )
 import           Control.Monad.Fix              ( MonadFix )
 import           GHC.Exception                  ( ErrorCall(ErrorCall) )
 import           Data.Semialign.Indexed         ( ialignWith )
-import qualified Data.HashMap.Strict           as HM
 import           Data.List                      ( partition )
 import           Data.These                     ( These(..) )
 import           Nix.Atoms
+import qualified Nix.Core.AttrSet              as A
+import           Nix.AttrSet.HashMap           ()  -- Import SemialignWithIndex instance
 import           Nix.Convert
 import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
@@ -241,12 +242,12 @@ attrSetAlter allowOverwrite ks' pos m' p' val =
   go p m (k : ks) =
     if isPresent ks
       then
-        case HM.lookup k m of
+        case A.lookup k m of
           Nothing -> recurse mempty mempty
           -- Dynamic attribute already defined - raise error (matching Nix behavior)
           -- unless allowOverwrite is True (for __overrides)
           Just _ | not allowOverwrite ->
-            let oldPosMsg = case HM.lookup k p of
+            let oldPosMsg = case A.lookup k p of
                   Just oldPos -> " at " <> show oldPos
                   Nothing     -> ""
             in evalError @v $ ErrorCall $
@@ -257,11 +258,11 @@ attrSetAlter allowOverwrite ks' pos m' p' val =
       else
         -- Single-key binding: check for duplicate (from dynamic keys that evaluate to same value)
         -- unless allowOverwrite is True (for __overrides)
-        case HM.lookup k m of
+        case A.lookup k m of
           Nothing -> pure $ insertVal val
           Just _ | allowOverwrite -> pure $ insertVal val
           Just _ ->
-            let oldPosMsg = case HM.lookup k p of
+            let oldPosMsg = case A.lookup k p of
                   Just oldPos -> " at " <> show oldPos
                   Nothing     -> ""
             in evalError @v $ ErrorCall $
@@ -274,8 +275,8 @@ attrSetAlter allowOverwrite ks' pos m' p' val =
       , insertV v
       )
      where
-      insertV v' = HM.insert k v' m
-      insertPos = HM.insert k pos p
+      insertV v' = A.insert k v' m
+      insertPos = A.insert k pos p
 
     recurse
       :: PositionSet
@@ -334,12 +335,12 @@ evalBinds isRecursive binds =
             (\ (k, v) ->
               ( True  -- allowOverwrite for __overrides contents
               , one k
-              , case HM.lookup k p' of
+              , case A.lookup k p' of
                   Nothing -> pos
                   Just p2 -> p2
               , demand v
               )
-            ) <$> HM.toList o'
+            ) <$> A.toList o'
           -- Include __overrides itself (not overwriting, use original position/value)
           selfEntry =
             ( False  -- don't allow overwriting __overrides itself
@@ -429,7 +430,7 @@ evalSelect aset attr =
       case mset of
         Nothing -> left
         Just (attrs, _) ->
-          case HM.lookup k attrs of
+          case A.lookup k attrs of
             Nothing -> left
             Just v ->
               handlePresence
@@ -508,7 +509,7 @@ buildArgument params arg =
   case params of
     -- For simple parameter binding, arg is already thunked from evalApp.
     -- No need for additional defer - just bind the name to the existing thunk.
-    Param name -> one . (name,) <$> arg
+    Param name -> A.singleton name <$> arg
     ParamSet mname variadic pset -> do
       -- ParamSet needs scope for default value evaluation
       scope <- askScopes
@@ -518,10 +519,10 @@ buildArgument params arg =
         inject =
           case mname of
             Nothing -> id
-            Just name -> HM.insert name (const argThunk) -- why insert into const? Thunk value getting magic point?
+            Just name -> A.insert name (const argThunk) -- why insert into const? Thunk value getting magic point?
       loebM $
         inject $
-          HM.mapMaybe
+          A.mapMaybe
             id
             $ ialignWith
                 (assemble scope variadic)

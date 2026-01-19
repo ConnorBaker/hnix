@@ -3,9 +3,9 @@ module Nix.XML
 where
 
 import           Nix.Prelude
-import qualified Data.HashMap.Strict           as HM
 import           Nix.Atoms
 import           Nix.Expr.Types
+import qualified Nix.Core.AttrSet              as A
 import           Nix.String
 import           Nix.Value
 import qualified Data.Vector                   as V
@@ -55,7 +55,7 @@ toXML = runWithStringContext . fmap pp . iterNValueByDiscardWith cyc phi
         "attrs"
         . fmap
             mkElem'
-            . sortWith fst . HM.toList
+            . sortWith fst . A.toList
         <$> sequenceA s
      where
       mkElem' :: (VarName, Element) -> Content

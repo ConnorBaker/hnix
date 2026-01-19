@@ -20,7 +20,9 @@ import           Nix.Context                    ( CtxCfg )
 import           Nix.Scope
 import           Nix.Value.Monad                ( demand )
 
-import qualified Data.HashMap.Lazy             as M
+import           Nix.Scope                      ( scopeFromList, scopeToList, scopeLookupSingle, scopeKeys
+                                                , unScope, attrSetToList, attrSetLookup, attrSetKeys
+                                                )
 import           Data.Char                      ( isSpace )
 import           Data.List                      ( dropWhileEnd )
 import qualified Data.Text                     as Text
@@ -158,9 +160,8 @@ initState mIni = do
   builtins <- evalText "builtins"
 
   let
-    scope = coerce $
-      M.fromList $
-      ("builtins", builtins) : fmap ("input",) (maybeToList mIni)
+    scope = scopeFromList $
+      (mkVarName "builtins", builtins) : fmap (mkVarName "input",) (maybeToList mIni)
 
   opts <- askOptions
 
@@ -232,7 +233,7 @@ exec update source =
 
                   -- If the result value is a set, update our context with it
                   case val of
-                    NVSet _ (coerce -> scope) -> put state { replCtx = scope <> replCtx state }
+                    NVSet _ attrSet -> put state { replCtx = Scope attrSet <> replCtx state }
                     _          -> stub
 
                 pure $ pure val
@@ -301,7 +302,7 @@ browse _ =
           liftIO $ Text.putStr $ varNameText k <> " = "
           printValue v
       )
-      (M.toList $ coerce $ replCtx state)
+      (scopeToList $ replCtx state)
 
 -- | @:load@ command
 load
@@ -328,7 +329,7 @@ typeof src = do
     maybe
       (exec False src)
       (pure . pure)
-      (M.lookup (mkVarName src) (coerce $ replCtx state))
+      (scopeLookupSingle (mkVarName src) (replCtx state))
 
   traverse_ printValueType mVal
 
@@ -409,21 +410,21 @@ completeFunc reversedPrev word
                     candidates
                   )
         )
-        (M.lookup (mkVarName var) $ coerce $ replCtx state)
+        (scopeLookupSingle (mkVarName var) (replCtx state))
 
   -- Builtins, context variables
   | otherwise =
     do
       state <- get
       let
-          scopeHashMap :: HashMap VarName (NValue t f m)
-          scopeHashMap = coerce $ replCtx state
+          scopeAttrSet :: AttrSet (NValue t f m)
+          scopeAttrSet = unScope (replCtx state)
           contextKeys :: [VarName]
-          contextKeys = M.keys scopeHashMap
+          contextKeys = attrSetKeys scopeAttrSet
           builtins :: AttrSet (NValue t f m)
-          (Just (NVSet _ builtins)) = M.lookup "builtins" scopeHashMap
+          (Just (NVSet _ builtins)) = attrSetLookup (mkVarName "builtins") scopeAttrSet
           shortBuiltins :: [VarName]
-          shortBuiltins = M.keys builtins
+          shortBuiltins = attrSetKeys builtins
 
       pure $ listCompletion $ toString <$>
         one "__includes"
@@ -442,13 +443,15 @@ completeFunc reversedPrev word
       -> m [Text]
     algebraicComplete subFields val =
       let
-        keys = fmap ("." <>) . M.keys
+        -- Convert AttrSet to list of (Text, v) for Text-based lookup
+        attrSetToTextList' xs = [(varNameText k, v) | (k, v) <- attrSetToList xs]
+        keysToTexts xs = fmap (("." <>) . fst) $ attrSetToTextList' xs
 
-        withMap m =
+        withAttrSet xs =
           case subFields of
-            [] -> pure $ keys m
+            [] -> pure $ keysToTexts xs
             -- Stop on last subField (we care about the keys at this level)
-            [_] -> pure $ keys m
+            [_] -> pure $ keysToTexts xs
             f:fs ->
               maybe
                 stub
@@ -456,10 +459,10 @@ completeFunc reversedPrev word
                    (("." <> f) <>)
                    . algebraicComplete fs <=< demand
                 )
-                (M.lookup f m)
+                (attrSetLookup (mkVarName f) xs)
       in
       case val of
-        NVSet _ xs -> withMap (M.mapKeys varNameText xs)
+        NVSet _ xs -> withAttrSet xs
         _          -> stub
 
 -- | HelpOption inspired by Dhall Repl

@@ -24,6 +24,7 @@
 module Nix.Expr.Types
   ( module Nix.Expr.Types
   , module Nix.Types.VarName  -- Re-export VarName from hnix-types
+  , AttrSet  -- Re-export AttrSet from hnix-core
   , SourcePos(..)
   , unPos
   , mkPos
@@ -35,6 +36,9 @@ import qualified Codec.Serialise               as Serialise
 import           Codec.Serialise                ( Serialise )
 -- VarName is now imported from hnix-types for Backpack compatibility
 import           Nix.Types.VarName
+-- AttrSet is now the abstract type from hnix-core (instantiated via Backpack)
+import           Nix.Core.AttrSet               ( AttrSet )
+import qualified Nix.Core.AttrSet               as A
 import           Control.DeepSeq                ( NFData1(..) )
 import           Data.Aeson
 import qualified Data.Binary                   as Binary
@@ -123,13 +127,9 @@ toSourcePos :: NSourcePos -> SourcePos
 toSourcePos (NSourcePos f l c) =
   SourcePos (coerce f) (coerce l) (coerce c)
 
--- | AttrSet type alias for HashMap VarName.
--- Note: We keep this as a type alias (not the abstract type from hnix-core)
--- because the abstract type lacks instances like Ord, Data, Serialise, Binary,
--- ToJSON/FromJSON needed for deriving on Params and other types.
-type AttrSet = HashMap VarName
+-- AttrSet is now imported from Nix.Core.AttrSet (instantiated via Backpack mixins).
 
--- | Holds file positionng information for abstrations.
+-- | Holds file positionng information for abstractions.
 -- A type synonym for @HashMap VarName NSourcePos@.
 type PositionSet = AttrSet NSourcePos
 
@@ -212,7 +212,7 @@ type ParamSet r = AttrSet (Maybe r)
 
 -- | Get parameters in lexicographically sorted order for deterministic output.
 paramSetToSortedList :: ParamSet r -> [(VarName, Maybe r)]
-paramSetToSortedList = sortOn fst . HM.toList
+paramSetToSortedList = sortOn fst . A.toList
 
 data Variadic = Closed | Variadic
   deriving
@@ -709,33 +709,68 @@ instance IsString NExpr where
 
 instance Serialise NExpr
 
-instance TH.Lift NExpr where
-  lift =
-    TH.dataToExpQ
-      (\b ->
-        -- Handle Text values
-        (do
-          HRefl <-
-            Reflection.eqTypeRep
-              (Reflection.typeRep @Text)
-              (Reflection.typeOf  b    )
-          pure [| $(TH.lift b) |]
-        )
-        <|>
-        -- Handle VarName values to use mkVarName instead of constructor
-        (do
-          HRefl <-
-            Reflection.eqTypeRep
-              (Reflection.typeRep @VarName)
-              (Reflection.typeOf  b    )
-          pure $ TH.appE (TH.varE 'mkVarName) (TH.litE (TH.stringL (toString (varNameText b))))
-        )
+-- | Polymorphic NExpr lifter using dataToQa with custom handlers.
+-- This is needed because liftData uses Data instances which don't generate
+-- correct code for abstract types like VarName and AttrSet.
+liftNExpr :: (TH.Quote m) => NExpr -> m TH.Exp
+liftNExpr = TH.dataToQa
+  id  -- Name -> Name (keep constructor names as-is)
+  TH.litE  -- How to lift literals
+  applyConstr  -- How to apply constructor
+  liftNExprHandler
+  where
+    -- Apply constructor to arguments (monadic fold)
+    applyConstr :: TH.Quote m => TH.Name -> [m TH.Exp] -> m TH.Exp
+    applyConstr name args = go (TH.conE name) args
+      where
+        go acc [] = acc
+        go acc (x:xs) = go (TH.appE acc x) xs
+
+    -- | Custom handlers for types that need special lifting
+    liftNExprHandler :: (TH.Quote m, Data b) => b -> Maybe (m TH.Exp)
+    liftNExprHandler b =
+      -- Handle Text: delegate to its Lift instance (Data instance generates invalid constructor)
+      (do
+        HRefl <-
+          Reflection.eqTypeRep
+            (Reflection.typeRep @Text)
+            (Reflection.typeOf b)
+        pure $ TH.lift b
       )
-#if MIN_VERSION_template_haskell(2,17,0)
-  liftTyped = TH.unsafeCodeCoerce . TH.lift
-#elif MIN_VERSION_template_haskell(2,16,0)
-  liftTyped = TH.unsafeTExpCoerce . TH.lift
-#endif
+      <|>
+      -- Handle VarName: delegate to its Lift instance which uses mkVarName
+      (do
+        HRefl <-
+          Reflection.eqTypeRep
+            (Reflection.typeRep @VarName)
+            (Reflection.typeOf b)
+        -- Use the VarName Lift instance
+        pure $ TH.lift b
+      )
+      <|>
+      -- Handle AttrSet (Maybe NExpr) - used in ParamSet
+      (do
+        HRefl <-
+          Reflection.eqTypeRep
+            (Reflection.typeRep @(AttrSet (Maybe NExpr)))
+            (Reflection.typeOf b)
+        -- Lift using fromList and recursively lift the pairs
+        pure $ liftAttrSet b
+      )
+
+    -- Helper to lift AttrSet values using A.fromList
+    liftAttrSet :: (TH.Quote m, TH.Lift a) => AttrSet a -> m TH.Exp
+    liftAttrSet as = do
+      let pairs = A.toList as
+      pairsExpr <- TH.lift pairs
+      pure $ TH.AppE (TH.VarE 'A.fromList) pairsExpr
+
+-- | NExpr Lift instance.
+-- Uses dataToQa with custom handlers for VarName and AttrSet to ensure
+-- generated code uses smart constructors (mkVarName, A.fromList).
+instance TH.Lift NExpr where
+  lift = liftNExpr
+  -- liftTyped uses the default implementation: unsafeCodeCoerce . lift
 
 
 -- ** Methods
@@ -750,7 +785,7 @@ hashAt
 #else
 hashAt :: VarName -> Lens' (AttrSet v) (Maybe v)
 #endif
-hashAt = flip HM.alterF
+hashAt = A.hashAt
 
 -- | Get the name out of the parameter (there might be none).
 paramName :: Params r -> Maybe VarName
@@ -855,9 +890,9 @@ getFreeVars e =
     (NAbs (ParamSet varname _ pset) expr) ->
       Set.difference
         -- Include all free variables from the expression and the default arguments
-        (getFreeVars expr <> Set.unions (getFreeVars <$> catMaybes (HM.elems pset)))
+        (getFreeVars expr <> Set.unions (getFreeVars <$> catMaybes (A.elems pset)))
         -- But remove the argument name if existing, and all arguments in the parameter set
-        ((one `whenJust` varname) <> Set.fromList (HM.keys pset))
+        ((one `whenJust` varname) <> Set.fromList (A.keys pset))
     (NLet         bindings expr   ) ->
       Set.difference
         (getFreeVars expr <> bindFreeVars bindings)

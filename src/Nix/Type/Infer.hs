@@ -37,6 +37,7 @@ import           Control.Monad.ST               ( ST
 import           Data.Fix                       ( foldFix )
 import qualified Data.HashMap.Strict           as HM
 import qualified Data.HashSet                  as HS
+import qualified Nix.Core.AttrSet              as A
 import           Data.List                      ( delete
                                                 , (!!)
                                                 )
@@ -74,7 +75,7 @@ normalizeScheme (Forall _ body) = Forall (snd <$> ord) (normtype body)
   fv (TVar a  ) = one a
   fv (a :~> b ) = on (<>) fv a b
   fv (TCon _  ) = mempty
-  fv (TSet _ a) = foldMap fv $ HM.elems a
+  fv (TSet _ a) = foldMap fv $ A.elems a
   fv (TList a ) = foldMap fv a
   fv (TMany ts) = foldMap fv ts
 
@@ -339,7 +340,7 @@ instance
   fromValueMay (Judgment _ _ (TSet _ xs)) =
     do
       let sing = const inferred
-      pure $ pure (HM.mapWithKey sing xs, mempty)
+      pure $ pure (A.mapWithKey sing xs, mempty)
   fromValueMay _ = stub
   fromValue =
     pure .
@@ -418,10 +419,10 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
     pure $
       inferred $
         TSet mempty $
-          HM.fromList
-            [ ("file", typePath)
-            , ("line", typeInt )
-            , ("col" , typeInt )
+          A.fromList
+            [ (mkVarName "file", typePath)
+            , (mkVarName "line", typeInt )
+            , (mkVarName "col" , typeInt )
             ]
 
   evalConstant c = pure $ inferred $ fun c
@@ -490,12 +491,12 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
         (tv :~> t)
 
   evalAbs (ParamSet _mname variadic pset) k = do
-    -- Convert HashMap to list for iteration
-    let psetList = HM.toList pset
+    -- Convert AttrSet to list for iteration
+    let psetList = A.toList pset
     js <- foldInitializedWith fold one intoFresh psetList
 
     let
-      f (as1, t1) (k, t) = (as1 <> one (k, t), HM.insert k t t1)
+      f (as1, t1) (k, t) = (as1 <> one (k, t), A.insert k t t1)
       (env, tys) = foldl' f mempty js
       arg   = pure $ Judgment env mempty $ TSet Variadic tys
       call  = k arg $ \args b -> (args, ) <$> b
@@ -508,7 +509,7 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
     pure $
       Judgment
         (foldl' Assumption.remove as names)
-        (cs <> [ EqConst t' (tys HM.! x) | x <- names, t' <- Assumption.lookup x as ])
+        (cs <> [ EqConst t' (fromJust (A.lookup x tys)) | x <- names, t' <- Assumption.lookup x as ])
         (ty :~> t)
 
   evalError = throwError . EvaluationError
@@ -526,7 +527,7 @@ occursCheck a t = a `Set.member` ftv t
 instance FreeTypeVars Type where
   ftv TCon{}      = mempty
   ftv (TVar a   ) = one a
-  ftv (TSet _ a ) = Set.unions $ ftv <$> HM.elems a
+  ftv (TSet _ a ) = Set.unions $ ftv <$> A.elems a
   ftv (TList a  ) = Set.unions $ ftv <$> a
   ftv (t1 :~> t2) = ftv t1 <> ftv t2
   ftv (TMany ts ) = Set.unions $ ftv <$> ts
@@ -754,8 +755,8 @@ unifies (TList xs) (TList ys)
 -- be unified.
 unifies t1@(TList _    ) t2@(TList _    ) = throwError $ UnificationFail t1 t2
 unifies (TSet Variadic _) (TSet Variadic _)                                 = stub
-unifies (TSet Closed   s) (TSet Closed   b) | HS.null (HS.difference (HM.keysSet b) (HM.keysSet s)) = stub
-unifies (TSet _ a) (TSet _ b) | HM.keysSet b `HS.isSubsetOf` HM.keysSet a = stub
+unifies (TSet Closed   s) (TSet Closed   b) | HS.null (HS.difference (HS.fromList (A.keys b)) (HS.fromList (A.keys s))) = stub
+unifies (TSet _ a) (TSet _ b) | HS.fromList (A.keys b) `HS.isSubsetOf` HS.fromList (A.keys a) = stub
 unifies (t1 :~> t2) (t3 :~> t4) = unifyMany [t1, t2] [t3, t4]
 unifies (TMany t1s) t2          = considering t1s >>- (`unifies` t2)
 unifies t1          (TMany t2s) = considering t2s >>- unifies t1

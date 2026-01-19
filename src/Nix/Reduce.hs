@@ -33,6 +33,7 @@ import           Data.Fix                       ( Fix(..)
                                                 )
 import qualified Data.HashMap.Strict           as HM
 import qualified Data.List.NonEmpty            as NE
+import qualified Nix.Core.AttrSet              as A
 import qualified Text.Show
 import           Nix.Atoms
 import           Nix.Effects.Basic              ( pathToDefaultNixFile )
@@ -178,7 +179,7 @@ reduce (NAppAnnF bann fun arg) =
       do
         x <- arg
         pushScope
-          (coerce $ HM.singleton name x)
+          (coerce $ A.singleton name x)
           (foldFix reduce body)
 
     f -> NAppAnn bann f <$> arg
@@ -262,7 +263,7 @@ reduce (NLetAnnF ann binds body) =
   do
     binds' <- traverse sequenceA binds
     body'  <-
-      (`pushScope` body) . coerce . HM.fromList . catMaybes =<<
+      (`pushScope` body) . coerce . A.fromList . catMaybes =<<
         traverse
           (\case
             NamedVar (StaticKey name :| []) def _pos ->
@@ -305,9 +306,9 @@ reduce (NAbsAnnF ann params body) = do
   let
     scope = coerce $
       case params' of
-        Param    name     -> one (name, NSymAnn ann name)
+        Param    name     -> A.singleton name (NSymAnn ann name)
         ParamSet _ _ pset ->
-          HM.mapWithKey (\k _ -> NSymAnn ann k) pset
+          A.mapWithKey (\k _ -> NSymAnn ann k) pset
   NAbsAnn ann params' <$> pushScope scope body
 
 reduce v = reduceLayer v

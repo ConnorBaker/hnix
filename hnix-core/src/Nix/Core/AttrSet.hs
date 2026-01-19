@@ -15,7 +15,9 @@ module Nix.Core.AttrSet
     -- * Bulk operations
   , union
   , unionWith
+  , insertWith
   , intersection
+  , intersectionWith
   , difference
     -- * Conversion
   , fromList
@@ -30,6 +32,7 @@ module Nix.Core.AttrSet
   , traverseWithKey
   , foldlWithKey'
   , filterWithKey
+  , mapMaybe
   , alterF
     -- * Lens operations
   , hashAt

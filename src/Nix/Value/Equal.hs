@@ -13,7 +13,6 @@ import           Control.Monad.Trans.Except     ( throwE )
 import           Data.Semialign                 ( Align
                                                 , Semialign(align)
                                                 )
-import qualified Data.HashMap.Strict           as HM
 import           Data.These                     ( These(These) )
 import           Nix.Atoms
 import           Nix.Frames
@@ -21,6 +20,8 @@ import           Nix.String
 import           Nix.Thunk
 import           Nix.Value
 import           Nix.Expr.Types                 ( AttrSet )
+import qualified Nix.Core.AttrSet              as A
+import           Nix.AttrSet.HashMap           ()  -- Import Align and SemialignWithIndex instances
 
 checkComparable
   :: ( Framed e m
@@ -70,7 +71,7 @@ isDerivationM
   -> m Bool
 isDerivationM f m =
   do
-    mtype <- traverse f (HM.lookup "type" m)
+    mtype <- traverse f (A.lookup "type" m)
     case join mtype of
       Nothing -> pure False
       Just ty ->
@@ -122,7 +123,7 @@ compareAttrSetsM f eq lm rm =
       else compareAttrs
  where
   areDerivations = on (liftA2 (&&)) (isDerivationM f              ) lm rm
-  equalOutPaths  = on (liftA2   eq) (HM.lookup "outPath") lm rm
+  equalOutPaths  = on (liftA2   eq) (A.lookup "outPath") lm rm
   compareAttrs   =     alignEqM eq                                  lm rm
 
 valueEqM

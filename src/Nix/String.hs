@@ -40,13 +40,13 @@ where
 
 import           Nix.Prelude             hiding ( Type, TVar )
 import           Control.Monad.Writer           ( WriterT(..), MonadWriter(tell))
-import qualified Data.HashMap.Strict           as HM
 import qualified Data.HashSet                  as HS
 import qualified Data.Text                     as Text
 import           Nix.Expr.Types                 ( VarName
                                                 , AttrSet
                                                 , varNameText
                                                 )
+import qualified Nix.Core.AttrSet              as A
 
 
 -- * Types
@@ -189,7 +189,7 @@ hasContext (NixString c _) = isPresent c
 
 fromNixLikeContext :: NixLikeContext -> HS.HashSet StringContext
 fromNixLikeContext =
-  HS.fromList . (uncurry toStringContexts <=< HM.toList . getNixLikeContext)
+  HS.fromList . (uncurry toStringContexts <=< A.toList . getNixLikeContext)
 
 -- | Extract the string contents from a NixString that has no context
 getStringNoContext :: NixString -> Maybe Text
@@ -251,7 +251,7 @@ toNixLikeContext stringContext =
  where
   fun :: (StringContext -> AttrSet NixLikeContextValue -> AttrSet NixLikeContextValue)
   fun sc =
-    uncurry (HM.insertWith (<>)) (swap $ toNixLikeContextValue sc)
+    uncurry (A.insertWith (<>)) (swap $ toNixLikeContextValue sc)
 
 -- | Add 'StringContext's into the resulting set.
 addStringContext

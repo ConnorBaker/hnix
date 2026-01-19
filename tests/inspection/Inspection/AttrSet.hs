@@ -32,13 +32,13 @@ module Inspection.AttrSet
 import           Relude
 
 import           Data.Coerce                    ( coerce )
-import qualified Data.HashMap.Strict           as HM
 import           Data.Functor.Identity          ()
 import           Test.Inspection
 
 import           Nix.Cited                      ( NCited, Provenance )
 import           Nix.Cited.Basic                ( Cited(..) )
 import           Nix.Expr.Types                 ( PositionSet, VarName, AttrSet )
+import qualified Nix.Scope                     as S
 import           Nix.Standard                   ( CitedF(..) )
 import           Nix.Value                      ( NValue', NValueF(..) )
 
@@ -77,19 +77,19 @@ testMkAttrSetWithPositions = NVSetF
 
 -- * HashMap operation tests
 
--- | Test AttrSet lookup (which is HashMap lookup).
+-- | Test AttrSet lookup (via abstract signature).
 testAttrSetLookup :: VarName -> AttrSet r -> Maybe r
-testAttrSetLookup = HM.lookup
+testAttrSetLookup = S.attrSetLookup
 {-# NOINLINE testAttrSetLookup #-}
 
 -- | Test AttrSet insertion.
 testAttrSetInsert :: VarName -> r -> AttrSet r -> AttrSet r
-testAttrSetInsert = HM.insert
+testAttrSetInsert = S.attrSetInsert
 {-# NOINLINE testAttrSetInsert #-}
 
 -- | Test AttrSet construction from list.
 testAttrSetFromList :: [(VarName, r)] -> AttrSet r
-testAttrSetFromList = HM.fromList
+testAttrSetFromList = S.attrSetFromList
 {-# NOINLINE testAttrSetFromList #-}
 
 

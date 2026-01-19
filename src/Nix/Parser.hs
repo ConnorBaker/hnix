@@ -69,6 +69,7 @@ import qualified Data.HashMap.Strict           as HM
 import qualified Data.HashSet                  as HS
 import qualified Data.Text                     as Text
 import           Nix.Expr.Types
+import qualified Nix.Core.AttrSet              as A
 import           Nix.Expr.Shorthands     hiding ( ($>) )
 import           Nix.Expr.Types.Annotated
 import           Nix.Expr.Strings               ( escapeCodes
@@ -881,14 +882,14 @@ argExpr =
       do
         name             <- identifier <* symbol '@'
         (variadic, pset) <- params
-        pure $ ParamSet (pure name) variadic (HM.fromList pset)
+        pure $ ParamSet (pure name) variadic (A.fromList pset)
 
   -- Parameters named by an identifier on the right, or none (`{x, y} @ args`)
   atRight =
     do
       (variadic, pset) <- params
       name             <- optional $ symbol '@' *> identifier
-      pure $ ParamSet name variadic (HM.fromList pset)
+      pure $ ParamSet name variadic (A.fromList pset)
 
   -- Return the parameters set.
   params = braces getParams

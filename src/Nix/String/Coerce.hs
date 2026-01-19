@@ -5,9 +5,9 @@ module Nix.String.Coerce where
 import           Nix.Prelude
 import           Control.Monad.Catch            ( MonadThrow )
 import           GHC.Exception                  ( ErrorCall(ErrorCall) )
-import qualified Data.HashMap.Strict           as HM
 import           Nix.Atoms
 import           Nix.Expr.Types                 ( VarName )
+import qualified Nix.Core.AttrSet              as A
 import           Nix.Effects
 import           Nix.Frames
 import           Nix.Options                   ( Options )
@@ -107,7 +107,7 @@ coerceAnyToNixString call ctsm = go
               Nothing     -> err v
            where
             continueOnKey :: (NValue t f m -> m (NValue t f m)) -> VarName -> Maybe (m NixString)
-            continueOnKey f = fmap (go <=< f) . (`HM.lookup` s)
+            continueOnKey f = fmap (go <=< f) . (`A.lookup` s)
             err v' = throwError $ ErrorCall $ "Expected a Set that has `__toString` or `outpath`, but saw: " <> show v'
           v -> coerceStringlike v
        where
