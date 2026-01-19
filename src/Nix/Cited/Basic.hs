@@ -242,13 +242,13 @@ instance
   force :: Cited prov u f m t -> m v
   force (Cited rep) = case sbool @prov of
     STrue  -> let NCited ps t = rep in handleDisplayProvenance ps $ force t
-    SFalse -> let Identity t = rep in force t  -- No provenance handling needed
+    SFalse -> let Identity t = rep in handleDisplayProvenance ([] :: [Provenance m (NValue u f m)]) $ force t
   {-# INLINABLE force #-}
 
   forceEff :: Cited prov u f m t -> m v
   forceEff (Cited rep) = case sbool @prov of
     STrue  -> let NCited ps t = rep in handleDisplayProvenance ps $ forceEff t
-    SFalse -> let Identity t = rep in forceEff t
+    SFalse -> let Identity t = rep in handleDisplayProvenance ([] :: [Provenance m (NValue u f m)]) $ forceEff t
   {-# INLINABLE forceEff #-}
 
   further :: Cited prov u f m t -> m (Cited prov u f m t)

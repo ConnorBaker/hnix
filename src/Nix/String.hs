@@ -16,6 +16,8 @@ module Nix.String
   , ignoreContext
   , mkNixStringWithoutContext
   , mkNixStringWithSingletonContext
+  , mkNixStrDirectPath
+  , mkNixStrAllOutputs
   , modifyNixContents
   , WithStringContext
   , WithStringContextT(..)
@@ -26,6 +28,10 @@ module Nix.String
   , runWithStringContextT'
   , runWithStringContext
   , runWithStringContext'
+  -- * Constants (for zero-allocation optimization)
+  , emptyStringContext
+  , nixStringEmpty
+  , nixStringOne
   )
 where
 
@@ -123,16 +129,48 @@ instance Hashable NixString
 
 -- * Functions
 
+-- ** Constants
+
+-- | Shared empty string context to avoid repeated allocations.
+-- This is used by 'mkNixStringWithoutContext' and related functions.
+emptyStringContext :: HS.HashSet StringContext
+emptyStringContext = mempty
+{-# NOINLINE emptyStringContext #-}
+
+-- | Empty NixString constant (empty text, no context).
+-- Use this instead of @mkNixStringWithoutContext ""@ in hot paths.
+nixStringEmpty :: NixString
+nixStringEmpty = NixString emptyStringContext ""
+{-# NOINLINE nixStringEmpty #-}
+
+-- | NixString "1" constant (no context).
+-- Used for boolean-to-string coercion of True.
+nixStringOne :: NixString
+nixStringOne = NixString emptyStringContext "1"
+{-# NOINLINE nixStringOne #-}
+
 -- ** Makers
 
 -- | Constructs NixString without a context
 mkNixStringWithoutContext :: Text -> NixString
-mkNixStringWithoutContext = NixString mempty
+mkNixStringWithoutContext = NixString emptyStringContext
 
 -- | Create NixString using a singleton context
 mkNixStringWithSingletonContext
   :: StringContext -> VarName -> NixString
 mkNixStringWithSingletonContext c s = NixString (one c) (varNameText s)
+
+-- | Create NixString with DirectPath context.
+-- This is the most common context type (for store paths).
+mkNixStrDirectPath :: VarName -> NixString
+mkNixStrDirectPath path = NixString (one $ StringContext DirectPath path) (varNameText path)
+{-# INLINE mkNixStrDirectPath #-}
+
+-- | Create NixString with AllOutputs context.
+-- Used for derivation paths that reference all outputs.
+mkNixStrAllOutputs :: VarName -> NixString
+mkNixStrAllOutputs path = NixString (one $ StringContext AllOutputs path) (varNameText path)
+{-# INLINE mkNixStrAllOutputs #-}
 
 -- | Create NixString from a Text and context
 mkNixString
@@ -252,12 +290,11 @@ runWithStringContext' = runIdentity . runWithStringContextT'
 
 -- | Combine NixStrings with a separator
 intercalateNixString :: NixString -> [NixString] -> NixString
-intercalateNixString _   []   = mempty
+intercalateNixString _   []   = nixStringEmpty
 intercalateNixString _   [ns] = ns
 intercalateNixString sep nss  =
-  uncurry NixString $
-    mapPair
-      (HS.unions . (one (getStringContext  sep) <>) . (getStringContext <$>)
-      , Text.intercalate (getStringContent sep) . (getStringContent <$>)
-      )
-      $ dup nss
+  NixString combinedContext combinedText
+ where
+  -- Use foldl' instead of HS.unions to avoid intermediate list allocation
+  combinedContext = foldl' HS.union (getStringContext sep) (getStringContext <$> nss)
+  combinedText = Text.intercalate (getStringContent sep) (getStringContent <$> nss)

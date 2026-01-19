@@ -13,6 +13,7 @@ import qualified Data.HashMap.Strict as HM
 import qualified Data.String as String
 import           Data.Time
 import qualified EvalTests
+import qualified InternedValueTests
 import           NeatInterpolation (text)
 import qualified Nix
 import           Nix.Expr.Types
@@ -107,6 +108,7 @@ main = do
     , EvalTests.tests
     , PrettyTests.tests
     , ReduceExprTests.tests
+    , InternedValueTests.tests
     , PrettyParseTests.tests $ fromIntegral $ read @Int $ fromMaybe "0" prettyTestsEnv
     , evalComparisonTests
     , testCase "Nix language tests present" ensureLangTestsPresent

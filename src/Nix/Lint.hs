@@ -466,14 +466,15 @@ lintApp context fun arg =
   ) =<< unpackSymbolic fun
 
 -- | Lint monad using DefaultCfg (linting doesn't need stats/provenance/tracing).
+-- Uses () for interned values since Lint uses Symbolic, not NValue.
 newtype Lint s a = Lint
-  { runLint :: ReaderT (Context DefaultCfg (Lint s) (Symbolic (Lint s))) (FreshIdT Int (ST s)) a }
+  { runLint :: ReaderT (Context DefaultCfg (Lint s) (Symbolic (Lint s)) ()) (FreshIdT Int (ST s)) a }
   deriving
     ( Functor
     , Applicative
     , Monad
     , MonadFix
-    , MonadReader (Context DefaultCfg (Lint s) (Symbolic (Lint s)))
+    , MonadReader (Context DefaultCfg (Lint s) (Symbolic (Lint s)) ())
     , MonadThunkId
     , MonadRef
     , MonadAtomicRef

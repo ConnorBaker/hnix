@@ -15,6 +15,7 @@ module Nix.Context
   , HasTraceCfgE
   , newContext
   , newContextWithStats
+  , newContextWithInterned
   , askEvalStats
   ) where
 
@@ -38,14 +39,14 @@ import           Nix.Expr.Types.Annotated       ( SrcSpan
 -- instance for your wrapper. For example:
 --
 -- @
--- newtype MyEnv cfg m t = MyEnv (Context cfg m t)
+-- newtype MyEnv cfg m t = MyEnv (Context cfg m t i)
 -- type instance CtxCfg (MyEnv cfg m t) = cfg
 -- @
 type family CtxCfg e where
-  CtxCfg (Context cfg m t) = cfg
+  CtxCfg (Context cfg m t i) = cfg
   CtxCfg e = TypeError
     ( 'Text "Cannot extract EvalCfg from type: " ':<>: 'ShowType e
-    ':$$: 'Text "CtxCfg only works with 'Context cfg m t' or types with a CtxCfg instance."
+    ':$$: 'Text "CtxCfg only works with 'Context cfg m t i' or types with a CtxCfg instance."
     ':$$: 'Text "If using a custom environment wrapper, add: type instance CtxCfg (YourType ...) = cfg"
     )
 
@@ -81,35 +82,56 @@ type HasTraceCfgE e = HasTraceCfg (CtxCfg e)
 -- configuration. This enables zero-cost conditional execution in
 -- the 'MonadEval' instance - GHC eliminates unused branches when
 -- @cfg@ is known at compile time.
-data Context (cfg :: EvalCfg) m t =
+--
+-- The @t@ parameter is the value type stored in scopes.
+--
+-- The @i@ parameter is for interned values. For NValue-based evaluation,
+-- this is @InternedValues t f m@. For other contexts (like Lint), use @()@.
+data Context (cfg :: EvalCfg) m t i =
   Context
     { getOptions   :: !Options
     , getScopes    :: !(Scopes m t)
     , getSource    :: !SrcSpan
     , getFrames    :: !Frames
     , getEvalStats :: !(Maybe EvalStats)
+    , getInterned  :: !i
     }
 
-instance Has (Context cfg m t) (Scopes m t) where
-  hasLens f a = (\x -> a { getScopes = x }) <$> f (getScopes a)
+instance Has (Context cfg m t i) (Scopes m t) where
+  hasLens g a = (\x -> a { getScopes = x }) <$> g (getScopes a)
 
-instance Has (Context cfg m t) SrcSpan where
-  hasLens f a = (\x -> a { getSource = x }) <$> f (getSource a)
+instance Has (Context cfg m t i) SrcSpan where
+  hasLens g a = (\x -> a { getSource = x }) <$> g (getSource a)
 
-instance Has (Context cfg m t) Frames where
-  hasLens f a = (\x -> a { getFrames = x }) <$> f (getFrames a)
+instance Has (Context cfg m t i) Frames where
+  hasLens g a = (\x -> a { getFrames = x }) <$> g (getFrames a)
 
-instance Has (Context cfg m t) Options where
-  hasLens f a = (\x -> a { getOptions = x }) <$> f (getOptions a)
+instance Has (Context cfg m t i) Options where
+  hasLens g a = (\x -> a { getOptions = x }) <$> g (getOptions a)
 
-instance Has (Context cfg m t) (Maybe EvalStats) where
-  hasLens f a = (\x -> a { getEvalStats = x }) <$> f (getEvalStats a)
+instance Has (Context cfg m t i) (Maybe EvalStats) where
+  hasLens g a = (\x -> a { getEvalStats = x }) <$> g (getEvalStats a)
 
-newContext :: Options -> Context cfg m t
-newContext o = Context o mempty nullSpan mempty Nothing
+instance Has (Context cfg m t i) i where
+  hasLens g a = (\x -> a { getInterned = x }) <$> g (getInterned a)
 
-newContextWithStats :: Options -> Maybe EvalStats -> Context cfg m t
-newContextWithStats o stats = Context o mempty nullSpan mempty stats
+-- | Create a new evaluation context without interned values.
+--
+-- Use this for contexts that don't use NValue (like Lint).
+newContext :: Options -> Context cfg m t ()
+newContext o = Context o mempty nullSpan mempty Nothing ()
+
+-- | Create a new evaluation context with optional statistics tracking.
+--
+-- Use this for contexts that don't use NValue (like Lint).
+newContextWithStats :: Options -> Maybe EvalStats -> Context cfg m t ()
+newContextWithStats o stats = Context o mempty nullSpan mempty stats ()
+
+-- | Create a new evaluation context with interned values.
+--
+-- Use this for NValue-based evaluation where value interning is beneficial.
+newContextWithInterned :: Options -> Maybe EvalStats -> i -> Context cfg m t i
+newContextWithInterned o stats interned = Context o mempty nullSpan mempty stats interned
 
 askEvalStats :: forall e m . (MonadReader e m, Has e (Maybe EvalStats)) => m (Maybe EvalStats)
 askEvalStats = askLocal

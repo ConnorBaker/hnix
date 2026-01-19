@@ -440,6 +440,7 @@ library
     Nix.Utils.Fix1
     Nix.Value
     Nix.Value.Equal
+    Nix.Value.Interned
     Nix.Value.Monad
     Nix.XML
   other-modules:
@@ -548,6 +549,7 @@ test-suite hnix-tests
   main-is: Main.hs
   other-modules:
     EvalTests
+    InternedValueTests
     NixLanguageTests
     ParserTests
     PrettyParseTests

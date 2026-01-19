@@ -133,6 +133,13 @@ type AttrSet = HashMap VarName
 -- A type synonym for @HashMap VarName NSourcePos@.
 type PositionSet = AttrSet NSourcePos
 
+-- | Shared empty position set constant.
+-- Use this instead of @mempty@ when creating @NVSet@ values to avoid
+-- repeated allocation of empty HashMaps.
+emptyPositionSet :: PositionSet
+emptyPositionSet = mempty
+{-# NOINLINE emptyPositionSet #-}
+
 -- ** Additional N{,Source}Pos instances
 
 -- Placed here because TH inference depends on declaration sequence.

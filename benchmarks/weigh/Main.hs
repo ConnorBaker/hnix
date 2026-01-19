@@ -126,6 +126,7 @@ benchmarks = do
   hashMapBenchmarks
   singletonDispatchBenchmarks
   evaluationBenchmarks
+  emptyCollectionBenchmarks
 
 -- | Benchmarks for Scope construction and lookup.
 scopeBenchmarks :: Weigh ()
@@ -294,6 +295,48 @@ evaluationBenchmarks = do
     io "mutual" evalNix "rec { a = b + 1; b = 1; }.a"
     io "inherit" evalNix "let x = 1; in { inherit x; }.x"
     io "inherit from" evalNix "let s = { x = 1; }; in { inherit (s) x; }.x"
+
+-- | Benchmarks for empty collection fast paths.
+--
+-- These benchmarks measure allocation for operations that should return
+-- interned empty values. With optimizations, these should have minimal
+-- allocation since they return cached singletons.
+emptyCollectionBenchmarks :: Weigh ()
+emptyCollectionBenchmarks = do
+  wgroup "Empty list fast paths" $ do
+    -- Operations that should return interned empty list
+    io "map over []" evalNix "builtins.map (x: x) []"
+    io "filter over []" evalNix "builtins.filter (x: true) []"
+    io "filter returns []" evalNix "builtins.filter (x: false) [1 2 3]"
+    io "tail of [x]" evalNix "builtins.tail [1]"
+    io "sort []" evalNix "builtins.sort (a: b: a < b) []"
+    io "concatLists []" evalNix "builtins.concatLists []"
+    io "concatLists [[] []]" evalNix "builtins.concatLists [[] []]"
+    io "concatMap over []" evalNix "builtins.concatMap (x: [x]) []"
+    io "genList 0" evalNix "builtins.genList (x: x) 0"
+    io "catAttrs over []" evalNix "builtins.catAttrs \"x\" []"
+    io "catAttrs returns []" evalNix "builtins.catAttrs \"x\" [{ y = 1; }]"
+    io "partition [] .right" evalNix "(builtins.partition (x: true) []).right"
+    io "partition [] .wrong" evalNix "(builtins.partition (x: true) []).wrong"
+
+  wgroup "Empty set fast paths" $ do
+    -- Operations that should return interned empty set
+    io "mapAttrs over {}" evalNix "builtins.mapAttrs (n: v: v) {}"
+    io "listToAttrs []" evalNix "builtins.listToAttrs []"
+    io "groupBy over []" evalNix "builtins.groupBy (x: x) []"
+    io "intersectAttrs {} {...}" evalNix "builtins.intersectAttrs {} { x = 1; }"
+    io "intersectAttrs {...} {}" evalNix "builtins.intersectAttrs { x = 1; } {}"
+    io "intersectAttrs disjoint" evalNix "builtins.intersectAttrs { a = 1; } { b = 2; }"
+    io "zipAttrsWith []" evalNix "builtins.zipAttrsWith (n: vs: vs) []"
+
+  wgroup "Non-empty baselines" $ do
+    -- Non-empty operations for comparison
+    io "map over [1 2 3]" evalNix "builtins.map (x: x) [1 2 3]"
+    io "filter keeps all" evalNix "builtins.filter (x: true) [1 2 3]"
+    io "genList 3" evalNix "builtins.genList (x: x) 3"
+    io "mapAttrs over {a=1}" evalNix "builtins.mapAttrs (n: v: v) { a = 1; }"
+    io "listToAttrs [{...}]" evalNix "builtins.listToAttrs [{ name = \"x\"; value = 1; }]"
+    io "intersectAttrs common" evalNix "builtins.intersectAttrs { a = 1; } { a = 2; }"
 
 
 -- ============================================================================

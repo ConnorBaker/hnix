@@ -684,11 +684,11 @@ defaultDerivationStrict val = do
         Map.mapWithKey
           (\out (mkVarName -> path) -> mkNixStringWithSingletonContext (StringContext (DerivationOutput out) drvPath) path)
           (outputs drv')
-      drvPathWithContext = mkNixStringWithSingletonContext (StringContext AllOutputs drvPath) drvPath
+      drvPathWithContext = mkNixStrAllOutputs drvPath
       attrSet = NVStr <$> HM.insert "drvPath" drvPathWithContext (Map.foldrWithKey HM.insert HM.empty outputsWithContext)
     -- TODO: Add location information for all the entries.
     --              here --v
-    pure $ NVSet mempty $ HM.mapKeys mkVarName attrSet
+    pure $ NVSet emptyPositionSet $ HM.mapKeys mkVarName attrSet
 
   where
 

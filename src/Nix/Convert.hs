@@ -233,8 +233,7 @@ instance ( Convertible e t f m
     \case
       NVStr' ns -> pure $ pure ns
       NVPath' p ->
-        (\path -> pure $ mkNixStringWithSingletonContext (StringContext DirectPath path) path) . fromString . coerce <$>
-          addPath p
+        (pure . mkNixStrDirectPath . fromString . coerce) <$> addPath p
       NVSet' _ s ->
         maybe
           stub

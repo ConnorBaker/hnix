@@ -356,14 +356,15 @@ splitMatches numDropped (((_, (start, len)) : captures) : mts) haystack =
 thunkStr :: NVConstraint f => ByteString -> NValue t f m
 thunkStr s = mkNVStrWithoutContext $ decodeUtf8 s
 
+-- | Check if a value is of a specific type. Returns interned boolean.
 hasKind
   :: forall a e t f m
    . (MonadNix e t f m, FromValue a m (NValue t f m))
   => NValue t f m
   -> m (NValue t f m)
-hasKind =
-  inHaskMay
-    (isJust @a)
+hasKind nv = do
+  mv <- fromValueMay @a nv
+  askInternedBool $ isJust mv
 
 
 absolutePathFromValue :: MonadNix e t f m => NValue t f m -> m Path
@@ -441,6 +442,9 @@ nixPathNix =
 toStringNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 toStringNix = toValue <=< coerceAnyToNixString callFunc DontCopyToStore
 
+-- | Check if an attribute exists in a set.
+-- Returns interned false immediately for empty set (fast path).
+-- Returns interned boolean for zero-allocation result.
 hasAttrNix
   :: forall e t f m
    . MonadNix e t f m
@@ -451,11 +455,16 @@ hasAttrNix x y =
   do
     (mkVarName -> key) <- fromStringNoContext =<< fromValue x
     (aset, _) <- fromValue @(AttrSet (NValue t f m), PositionSet) y
+    -- Fast path: empty set always returns false
+    if HM.null aset
+      then askInternedFalse
+      else askInternedBool $ HM.member key aset
 
-    toValue $ HM.member key aset
-
+-- | Check if a string has context. Returns interned boolean.
 hasContextNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
-hasContextNix = inHask hasContext
+hasContextNix nv = do
+  ns <- fromValue nv
+  askInternedBool $ hasContext ns
 
 getAttrNix
   :: forall e t f m
@@ -612,6 +621,7 @@ divNix nvX nvY =
 
 -- | Short-circuit evaluation: returns True as soon as any element satisfies the predicate.
 -- Uses V.foldr with lazy accumulator to avoid evaluating remaining elements.
+-- Returns interned boolean for zero-allocation result.
 anyNix
   :: forall e t f m
    . MonadNix e t f m
@@ -620,15 +630,17 @@ anyNix
   -> m (NValue t f m)
 anyNix f nvList = do
   vec <- fromValue @(V.Vector (NValue t f m)) nvList
-  toValue =<< V.foldr
+  result <- V.foldr
     (\x acc -> do
-      result <- callFunc f x >>= fromValue
-      if result then pure True else acc)
+      r <- callFunc f x >>= fromValue
+      if r then pure True else acc)
     (pure False)
     vec
+  askInternedBool result
 
 -- | Short-circuit evaluation: returns False as soon as any element fails the predicate.
 -- Uses V.foldr with lazy accumulator to avoid evaluating remaining elements.
+-- Returns interned boolean for zero-allocation result.
 allNix
   :: forall e t f m
    . MonadNix e t f m
@@ -637,12 +649,13 @@ allNix
   -> m (NValue t f m)
 allNix f nvList = do
   vec <- fromValue @(V.Vector (NValue t f m)) nvList
-  toValue =<< V.foldr
+  result <- V.foldr
     (\x acc -> do
-      result <- callFunc f x >>= fromValue
-      if result then acc else pure False)
+      r <- callFunc f x >>= fromValue
+      if r then acc else pure False)
     (pure True)
     vec
+  askInternedBool result
 
 foldl'Nix
   :: forall e t f m
@@ -675,7 +688,10 @@ tailNix nv = do
   v <- fromValue @(V.Vector (NValue t f m)) nv
   case nlTail v of
     Nothing -> throwError $ ErrorCall "builtins.tail: empty list"
-    Just t -> pure $ NVList t
+    -- Fast path: return interned empty list for singleton input
+    Just t
+      | V.null t  -> askInternedEmptyList
+      | otherwise -> pure $ NVList t
 
 splitVersionNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 splitVersionNix v =
@@ -808,24 +824,33 @@ substringNix start len str =
       then Text.take len
       else id  --NOTE: negative values of 'len' are OK, and mean "take everything"
 
+-- | Get attribute names from a set as a list of strings.
+-- Fast path: returns interned empty list for empty set.
 attrNamesNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-attrNamesNix =
-    coersion . inHask @(AttrSet (NValue t f m))
-      (fmap (mkNixStringWithoutContext . varNameText) . sort . HM.keys)
+attrNamesNix nvset = do
+  attrs <- fromValue @(AttrSet (NValue t f m)) nvset
+  if HM.null attrs
+    then askInternedEmptyList
+    else fmap coersion $ toValue @[NixString] $
+      fmap (mkNixStringWithoutContext . varNameText) $ sort $ HM.keys attrs
  where
-  coersion = fmap (coerce :: CoerceDeeperToNValue t f m)
+  coersion = coerce :: CoerceDeeperToNValue t f m
 
+-- | Get attribute values from a set as a list.
+-- Fast path: returns interned empty list for empty set.
 attrValuesNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 attrValuesNix nvattrs =
   do
     attrs <- fromValue @(AttrSet (NValue t f m)) nvattrs
-    toValue $
-      snd <$>
-        sortOn
-          (fst @VarName @(NValue t f m))
-          (HM.toList attrs)
+    if HM.null attrs
+      then askInternedEmptyList
+      else toValue $
+        snd <$>
+          sortOn
+            (fst @VarName @(NValue t f m))
+            (HM.toList attrs)
 
 -- | Map a function over a list.
 --
@@ -838,10 +863,14 @@ mapNix
   -> m (NValue t f m)
 mapNix f nv = do
   v <- fromValue @(V.Vector (NValue t f m)) nv
-  result <- nlTraverse
-    (defer . withFrame Debug (ErrorCall "While applying f in map:\n") . callFunc f)
-    v
-  toValue result
+  -- Fast path: return interned empty list for empty input
+  if V.null v
+    then askInternedEmptyList
+    else do
+      result <- nlTraverse
+        (defer . withFrame Debug (ErrorCall "While applying f in map:\n") . callFunc f)
+        v
+      toValue result
 
 mapAttrsNix
   :: forall e t f m
@@ -852,8 +881,12 @@ mapAttrsNix
 mapAttrsNix f xs =
   do
     nixAttrset <- fromValue @(AttrSet (NValue t f m)) xs
-    result <- HM.traverseWithKey applyFunToKeyVal nixAttrset
-    toValue result
+    -- Fast path: return interned empty set for empty input
+    if HM.null nixAttrset
+      then askInternedEmptySet
+      else do
+        result <- HM.traverseWithKey applyFunToKeyVal nixAttrset
+        toValue result
  where
   applyFunToKeyVal key val =
     defer @(NValue t f m) . withFrame Debug (ErrorCall "While applying f in mapAttrs:\n") $ do
@@ -870,23 +903,31 @@ zipAttrsWithNix f nvSets =
   do
     sets <- fromValue @(V.Vector (NValue t f m)) =<< demand nvSets
 
-    -- Collect values by key, accumulating as lists (O(1) prepend) then converting to Vector at end
-    -- Uses (++) which prepends [val] to existing list in O(1), building lists in reverse order
-    collected <-
-      V.foldM'
-        (\ acc v -> do
-          v' <- demand v
-          case v' of
-            NVSet _ attrs ->
-              pure $ HM.foldlWithKey' (\m k val -> HM.insertWith (++) k [val] m) acc attrs
-            _ ->
-              throwError $ ErrorCall $ "builtins.zipAttrsWith: expected a list of attrsets, got " <> show v'
-        )
-        mempty
-        sets
+    -- Fast path: return interned empty set for empty input
+    if V.null sets
+      then askInternedEmptySet
+      else do
+        -- Collect values by key, accumulating as lists (O(1) prepend) then converting to Vector at end
+        -- Uses (++) which prepends [val] to existing list in O(1), building lists in reverse order
+        collected <-
+          V.foldM'
+            (\ acc v -> do
+              v' <- demand v
+              case v' of
+                NVSet _ attrs ->
+                  pure $ HM.foldlWithKey' (\m k val -> HM.insertWith (++) k [val] m) acc attrs
+                _ ->
+                  throwError $ ErrorCall $ "builtins.zipAttrsWith: expected a list of attrsets, got " <> show v'
+            )
+            mempty
+            sets
 
-    result <- HM.traverseWithKey applyFunToKeyVals collected
-    toValue result
+        -- Fast path: return interned empty set if all input sets were empty
+        if HM.null collected
+          then askInternedEmptySet
+          else do
+            result <- HM.traverseWithKey applyFunToKeyVals collected
+            toValue result
  where
   applyFunToKeyVals key vals =
     defer @(NValue t f m) . withFrame Debug (ErrorCall "While applying f in zipAttrsWith:\n") $ do
@@ -905,8 +946,15 @@ filterNix
   -> m (NValue t f m)
 filterNix f nv = do
   v <- fromValue @(V.Vector (NValue t f m)) nv
-  result <- V.filterM predicate v
-  toValue result
+  -- Fast path: return interned empty list for empty input
+  if V.null v
+    then askInternedEmptyList
+    else do
+      result <- V.filterM predicate v
+      -- Fast path: return interned empty list if all elements filtered out
+      if V.null result
+        then askInternedEmptyList
+        else toValue result
  where
   predicate :: NValue t f m -> m Bool
   predicate = fromValue <=< callFunc f
@@ -922,11 +970,19 @@ catAttrsNix attrName xs =
     n <- fromStringNoContext =<< fromValue attrName
     v <- fromValue @(V.Vector (NValue t f m)) xs
 
-    -- Use V.mapMaybe to filter and transform in one pass
-    NVList . V.mapMaybe id <$>
-      V.mapM
-        (fmap (HM.lookup @VarName $ mkVarName n) . fromValue <=< demand)
-        v
+    -- Fast path: return interned empty list for empty input
+    if V.null v
+      then askInternedEmptyList
+      else do
+        -- Use V.mapMaybe to filter and transform in one pass
+        result <- V.mapMaybe id <$>
+          V.mapM
+            (fmap (HM.lookup @VarName $ mkVarName n) . fromValue <=< demand)
+            v
+        -- Fast path: return interned empty list if result is empty
+        if V.null result
+          then askInternedEmptyList
+          else pure $ NVList result
 
 baseNameOfNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 baseNameOfNix x =
@@ -1021,7 +1077,7 @@ pathNix arg =
 
     Right (mkVarName . toText . coerce @StorePath @String -> s) <- addToStore name (NarFile path) recursive False
     -- TODO: Ensure that s matches sha256 when not empty
-    pure $ NVStr $ mkNixStringWithSingletonContext (StringContext DirectPath s) s
+    pure $ NVStr $ mkNixStrDirectPath s
  where
   coerceToPath = coerceToString callFunc DontCopyToStore CoerceAny
 
@@ -1059,7 +1115,7 @@ filterSourceNix filterFun nvpath = do
   -- Clean up temp directory
   liftIO $ Directory.removeDirectoryRecursive tmpDir
 
-  pure $ NVStr $ mkNixStringWithSingletonContext (StringContext DirectPath s) s
+  pure $ NVStr $ mkNixStrDirectPath s
  where
   -- Convert FileType to the string that Nix uses
   fileTypeToString :: FileType -> Text
@@ -1161,24 +1217,35 @@ deepSeqNix
   -> m (NValue t f m)
 deepSeqNix a b = b <$ normalForm_ a
 
+-- | Check if an element is in a list.
+-- Returns interned false immediately for empty list (fast path).
+-- Returns interned boolean for zero-allocation result.
 elemNix
   :: forall e t f m
    . MonadNix e t f m
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-elemNix x = inHaskM (anyMNix $ valueEqM x)
+elemNix x lst = do
+  -- Use Vector directly to avoid list conversion overhead
+  vec <- fromValue @(V.Vector (NValue t f m)) lst
+  -- Fast path: empty list always returns false
+  if V.null vec
+    then askInternedFalse
+    else askInternedBool =<< anyMVec (valueEqM x) vec
  where
-  anyMNix :: Monad m => (a -> m Bool) -> [a] -> m Bool
-  anyMNix p =
-    handlePresence
-      (pure False)
-      (\ (x : xss) -> do
-        ok <- p x
-        if ok
-          then pure True
-          else anyMNix p xss
-      )
+  -- | Short-circuiting any for Vector - O(1) indexing, no list conversion
+  anyMVec :: Monad m => (a -> m Bool) -> V.Vector a -> m Bool
+  anyMVec p v = go 0
+   where
+    n = V.length v
+    go i
+      | i >= n    = pure False
+      | otherwise = do
+          ok <- p (V.unsafeIndex v i)
+          if ok
+            then pure True
+            else go (i + 1)
 
 -- | Get the element at a given index.
 --
@@ -1208,7 +1275,10 @@ genListNix f nixN =
     n <- fromValue @Integer nixN
     if n < 0
       then throwError $ ErrorCall $ "builtins.genList: Expected a non-negative number, got " <> show n
-      else toValue =<< V.generateM (fromIntegral n) genElement
+      -- Fast path: return interned empty list for n=0
+      else if n == 0
+        then askInternedEmptyList
+        else toValue =<< V.generateM (fromIntegral n) genElement
  where
   genElement i = defer $ callFunc f =<< toValue (fromIntegral i :: Integer)
 
@@ -1344,6 +1414,8 @@ replaceStringsNix tfrom tto ts =
 
     toValue $ go (getStringContext string) (ignoreContext string) mempty
 
+-- | Remove attributes from a set.
+-- Fast path: returns interned empty set if result is empty.
 removeAttrsNix
   :: forall e t f m
    . MonadNix e t f m
@@ -1355,9 +1427,12 @@ removeAttrsNix set v =
     (m, p) <- fromValue @(AttrSet (NValue t f m), PositionSet) set
     (nsToRemove :: [NixString]) <- fromValue $ Deeper v
     (fmap mkVarName -> toRemove) <- traverse fromStringNoContext nsToRemove
-    toValue (fun m toRemove, fun p toRemove)
+    let resultAttrs = fun m toRemove
+    if HM.null resultAttrs
+      then askInternedEmptySet
+      else toValue (resultAttrs, fun p toRemove)
  where
-  fun :: forall k v . (Eq k, Hashable k) => HashMap k v -> [k] -> HashMap k v
+  fun :: forall k a . (Eq k, Hashable k) => HashMap k a -> [k] -> HashMap k a
   fun = foldl' (flip HM.delete)
 
 intersectAttrsNix
@@ -1371,7 +1446,15 @@ intersectAttrsNix set1 set2 =
     (s1, p1) <- fromValue @(AttrSet (NValue t f m), PositionSet) set1
     (s2, p2) <- fromValue @(AttrSet (NValue t f m), PositionSet) set2
 
-    pure $ NVSet (p2 `HM.intersection` p1) (s2 `HM.intersection` s1)
+    -- Fast path: return interned empty set if either input is empty
+    if HM.null s1 || HM.null s2
+      then askInternedEmptySet
+      else do
+        let result = s2 `HM.intersection` s1
+        -- Fast path: return interned empty set if result is empty
+        if HM.null result
+          then askInternedEmptySet
+          else pure $ NVSet (p2 `HM.intersection` p1) result
 
 functionArgsNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -1400,11 +1483,8 @@ toFileNix name s =
         (coerce $ toString name')
         (ignoreContext s')
 
-    let
-      storepath  = mkVarName $ toText $ coerce @StorePath @String mres
-      sc = StringContext DirectPath storepath
-
-    toValue $ mkNixStringWithSingletonContext sc storepath
+    let storepath = mkVarName $ toText $ coerce @StorePath @String mres
+    toValue $ mkNixStrDirectPath storepath
 
 toPathNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 toPathNix = inHask @Path id
@@ -1432,8 +1512,9 @@ storePathNix nvpath =
     opts <- askOptions
     when (not (storeDirPrefix opts `Text.isPrefixOf` pathText)) $
       throwError $ ErrorCall $ "builtins.storePath: path '" <> show pathText <> "' is not in the Nix store (" <> show (storeDirText opts) <> ")"
-    toValue $ mkNixStringWithSingletonContext (StringContext DirectPath varPath) varPath
+    toValue $ mkNixStrDirectPath varPath
 
+-- | Check if a path exists. Returns interned boolean.
 pathExistsNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 pathExistsNix nvpath =
   do
@@ -1447,15 +1528,16 @@ pathExistsNix nvpath =
       if isStorePath opts path
         then storePathExists path
         else doesPathExist path
-    toValue exists
+    askInternedBool exists
 
+-- | Check if a value is a path. Returns interned boolean.
 isPathNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 isPathNix nv = do
   v <- demand nv
   case v of
-    NVPath _ -> pure $ NVBool True
-    _ -> pure $ NVBool False
+    NVPath _ -> askInternedTrue
+    _        -> askInternedFalse
 
 isAttrsNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
@@ -1482,26 +1564,24 @@ isNullNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
 isNullNix = hasKind @()
 
--- isString cannot use `hasKind` because it coerces derivationNixs to strings.
+-- | Check if a value is a string. Returns interned boolean.
+-- Note: Cannot use `hasKind` because it coerces derivations to strings.
 isStringNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 isStringNix nv =
   do
     v <- demand nv
+    case v of
+      NVStr{} -> askInternedTrue
+      _       -> askInternedFalse
 
-    toValue $
-      case v of
-        NVStr{} -> True
-        _       -> False
-
+-- | Check if a value is a function. Returns interned boolean.
 isFunctionNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 isFunctionNix nv =
   do
     v <- demand nv
-
-    toValue $
-      case v of
-        NVClosure{} -> True
-        _           -> False
+    case v of
+      NVClosure{} -> askInternedTrue
+      _           -> askInternedFalse
 
 throwNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 throwNix =
@@ -1520,7 +1600,7 @@ throwNix =
 --
 importNix
   :: forall e t f m . (MonadNix e t f m, HasProvCfg (CtxCfg e)) => NValue t f m -> m (NValue t f m)
-importNix = scopedImportNix $ NVSet mempty mempty
+importNix = scopedImportNix $ NVSet emptyPositionSet mempty
 
 -- | @scopedImport scope path@
 -- An undocumented secret powerful function.
@@ -1600,8 +1680,13 @@ sortNix
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-sortNix comp =
-  inHaskM (sortByM cmp)
+sortNix comp nv = do
+  v <- fromValue @[NValue t f m] nv
+  -- Fast path: return interned empty list for empty/singleton input
+  case v of
+    []  -> askInternedEmptyList
+    [x] -> toValue [x]  -- singleton doesn't need sorting
+    _   -> toValue =<< sortByM cmp v
  where
   cmp :: NValue t f m -> NValue t f m -> m Ordering
   cmp a b = do
@@ -1652,8 +1737,17 @@ concatWith
   -> m (NValue t f m)
 concatWith f nv = do
   outerVec <- fromValue @(V.Vector (NValue t f m)) nv
-  innerVecs <- V.mapM (fromValue @(V.Vector (NValue t f m)) <=< f) outerVec
-  pure $ NVList $ V.concat $ V.toList innerVecs
+  -- Fast path: return interned empty list for empty input
+  if V.null outerVec
+    then askInternedEmptyList
+    else do
+      innerVecs <- V.mapM (fromValue @(V.Vector (NValue t f m)) <=< f) outerVec
+      -- Use fold instead of V.concat $ V.toList to avoid intermediate list allocation
+      let result = fold innerVecs
+      -- Fast path: return interned empty list if result is empty
+      if V.null result
+        then askInternedEmptyList
+        else pure $ NVList result
 
 -- | Nix function of Haskell:
 -- > concat :: [[a]] -> [a]
@@ -1678,20 +1772,24 @@ listToAttrsNix
 listToAttrsNix lst =
   do
     v <- fromValue @(V.Vector (NValue t f m)) lst
-    -- Build pairs in order, then use HM.fromList with reversed order
-    -- so first occurrence wins (Nix semantics: first key wins)
-    pairs <- V.mapM
-      (\ nvattrset ->
-        do
-          a <- fromValue @(AttrSet (NValue t f m)) =<< demand nvattrset
-          (mkVarName -> name) <- fromStringNoContext =<< fromValue =<< demand =<< attrsetGet "name" a
-          val  <- attrsetGet "value" a
-          pure (name, val)
-      )
-      v
-    -- HM.fromList keeps the last occurrence, but we want the first.
-    -- Using V.foldr' processes right-to-left, so first occurrence is inserted last and wins.
-    pure $ NVSet mempty $ V.foldr' (uncurry HM.insert) HM.empty pairs
+    -- Fast path: return interned empty set for empty input
+    if V.null v
+      then askInternedEmptySet
+      else do
+        -- Build pairs in order, then use HM.fromList with reversed order
+        -- so first occurrence wins (Nix semantics: first key wins)
+        pairs <- V.mapM
+          (\ nvattrset ->
+            do
+              a <- fromValue @(AttrSet (NValue t f m)) =<< demand nvattrset
+              (mkVarName -> name) <- fromStringNoContext =<< fromValue =<< demand =<< attrsetGet "name" a
+              val  <- attrsetGet "value" a
+              pure (name, val)
+          )
+          v
+        -- HM.fromList keeps the last occurrence, but we want the first.
+        -- Using V.foldr' processes right-to-left, so first occurrence is inserted last and wins.
+        pure $ NVSet emptyPositionSet $ V.foldr' (uncurry HM.insert) mempty pairs
 
 -- prim_hashString from nix/src/libexpr/primops.cc
 -- fail if context in the algo arg
@@ -1941,15 +2039,19 @@ groupByNix nvfun nvlist = do
   list   <- demand nvlist
   fun    <- demand nvfun
   (f, v) <- extractP (fun, list)
-  -- Build up groups maintaining order: old ++ new (flip because insertWith passes new first)
-  NVSet mempty . fmap NVList <$>
-    V.foldM'
-      (\acc x -> do
-        name <- mkVarName <$> (fromValue @Text =<< f x)
-        pure $ HM.insertWith (flip (V.++)) name (V.singleton x) acc
-      )
-      mempty
-      v
+  -- Fast path: return interned empty set for empty input
+  if V.null v
+    then askInternedEmptySet
+    else do
+      -- Build up groups maintaining order: old ++ new (flip because insertWith passes new first)
+      result <- V.foldM'
+        (\acc x -> do
+          name <- mkVarName <$> (fromValue @Text =<< f x)
+          pure $ HM.insertWith (flip (V.++)) name (V.singleton x) acc
+        )
+        mempty
+        v
+      pure $ NVSet emptyPositionSet $ fmap NVList result
  where
   extractP (NVBuiltin _ f, NVList l) = pure (f, l)
   extractP (NVClosure _ f, NVList l) = pure (f, l)
@@ -2134,7 +2236,7 @@ fromJSONNix nvjson =
     \case
       A.Object m ->
         traverseToNValue
-          (NVSet mempty)
+          (NVSet emptyPositionSet)
 #if MIN_VERSION_aeson(2,0,0)
           (HM.mapKeys (mkVarName . AKM.toText)  $ AKM.toHashMap m)
 #else
@@ -2165,7 +2267,7 @@ fromTOMLNix nvtoml = do
  where
   tableToNValue :: Toml.Table' Toml.Position -> m (NValue t f m)
   tableToNValue (Toml.MkTable m) =
-    fmap (NVSet mempty) . traverse tomlToNValue $
+    fmap (NVSet emptyPositionSet) . traverse tomlToNValue $
       HM.fromList [(mkVarName k, v) | (k, (_, v)) <- M.toList m]
 
   tomlToNValue :: Toml.Value' Toml.Position -> m (NValue t f m)
@@ -2186,7 +2288,7 @@ fromTOMLNix nvtoml = do
     Toml.ZonedTime' _ zt  -> mkTimestamp $ formatZonedTime zt
 
   mkTimestamp :: Text -> m (NValue t f m)
-  mkTimestamp value = pure $ NVSet mempty $ HM.fromList
+  mkTimestamp value = pure $ NVSet emptyPositionSet $ HM.fromList
     [ (mkVarName "_type", mkNVStrWithoutContext "timestamp")
     , (mkVarName "value", mkNVStrWithoutContext value)
     ]
@@ -2544,17 +2646,30 @@ partitionNix
 partitionNix f nvlst =
   do
     v <- fromValue @(V.Vector (NValue t f m)) nvlst
-    -- Get (Bool, value) pairs
-    selection <- V.mapM (\t -> (, t) <$> (fromValue =<< callFunc f t)) v
+    emptyList <- askInternedEmptyList
 
-    let
-      (right, wrong) = V.partition fst selection
+    -- Fast path: return interned empty lists for empty input
+    if V.null v
+      then toValue @(AttrSet (NValue t f m))
+        $ HM.fromList
+            [ ("right", emptyList)
+            , ("wrong", emptyList)
+            ]
+      else do
+        -- Get (Bool, value) pairs
+        selection <- V.mapM (\t -> (, t) <$> (fromValue =<< callFunc f t)) v
 
-    toValue @(AttrSet (NValue t f m))
-      $ HM.fromList
-          [ ("right", NVList $ fmap snd right)
-          , ("wrong", NVList $ fmap snd wrong)
-          ]
+        let
+          (right, wrong) = V.partition fst selection
+          -- Use interned empty list when a partition is empty
+          rightList = if V.null right then emptyList else NVList $ fmap snd right
+          wrongList = if V.null wrong then emptyList else NVList $ fmap snd wrong
+
+        toValue @(AttrSet (NValue t f m))
+          $ HM.fromList
+              [ ("right", rightList)
+              , ("wrong", wrongList)
+              ]
 
 currentSystemNix :: MonadNix e t f m => m (NValue t f m)
 currentSystemNix =
@@ -2581,7 +2696,7 @@ getContextNix
 getContextNix =
   \case
     (NVStr ns) ->
-      NVSet mempty <$> traverseToValue (getNixLikeContext $ toNixLikeContext $ getStringContext ns)
+      NVSet emptyPositionSet <$> traverseToValue (getNixLikeContext $ toNixLikeContext $ getStringContext ns)
     x -> throwError $ ErrorCall $ "Invalid type for builtins.getContext: " <> show x
   <=< demand
 
@@ -2707,7 +2822,7 @@ builtinsList =
     , add2 Normal   "elem"             elemNix
     , add2 Normal   "elemAt"           elemAtNix
     , add  Normal   "exec"             execNix
-    , add0 Normal   "false"            (pure $ NVBool False)
+    , add0 Normal   "false"            askInternedFalse
     , add  Normal   "fetchGit"         fetchGit
     , add  Normal   "fetchTree"        fetchTree
     --, add  Normal   "fetchMercurial"   fetchMercurial
@@ -2747,7 +2862,7 @@ builtinsList =
     , add2 Normal   "match"            matchNix
     , add2 Normal   "mul"              mulNix
     , add0 Normal   "nixPath"          nixPathNix
-    , add0 Normal   "null"             (pure NVNull)
+    , add0 Normal   "null"             askInternedNull
     , add2 Normal   "outputOf"         outputOfNix
     , add  Normal   "parseDrvName"     parseDrvNameNix
     , add2 Normal   "partition"        partitionNix
@@ -2772,7 +2887,7 @@ builtinsList =
     , add  Normal   "toPath"           toPathNix -- Deprecated in Nix: https://github.com/NixOS/nix/pull/2524
     , add  Normal   "toXML"            toXMLNix
     , add2 Normal   "traceVerbose"     traceVerboseNix
-    , add0 Normal   "true"             (pure $ NVBool True)
+    , add0 Normal   "true"             askInternedTrue
     , add  Normal   "tryEval"          tryEvalNix
     , add  Normal   "typeOf"           typeOfNix
     , add  Normal   "unsafeDiscardOutputDependency" unsafeDiscardOutputDependencyNix
@@ -2893,7 +3008,7 @@ builtins
   => m (Scopes m (NValue t f m))
 builtins =
   do
-    ref <- defer $ NVSet mempty <$> buildMap
+    ref <- defer $ NVSet emptyPositionSet <$> buildMap
     (`pushScope` askScopes) . coerce . HM.fromList . (one ("builtins", ref) <>) =<< topLevelBuiltins
  where
   buildMap :: m (HashMap VarName (NValue t f m))

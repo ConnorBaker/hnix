@@ -74,9 +74,13 @@ import           Nix.Thunk.Basic                ( NThunkF(..)
                                                 )
 import           Nix.Utils.Fix1                 ( Fix1T(Fix1T) )
 import           Nix.Value
+import           Nix.Value.Interned            ( InternedValues, mkInternedValues )
 import           Nix.Value.Monad
 import qualified System.IO                     as IO
 import qualified System.Nix.StorePath          as Store
+
+-- | Type alias for the interned values in the standard monad.
+type StdInterned (prov :: Bool) m = InternedValues (ThunkF prov m) (CitedF prov m) m
 
 
 -- * Provenance-indexed types
@@ -224,7 +228,7 @@ instance
   , MonadCatch     m
   , MonadIO        m
   , SBoolI prov
-  , MonadReader (Context cfg m (ValueF prov m)) m
+  , MonadReader (Context cfg m (ValueF prov m) (StdInterned prov m)) m
   )
   => MonadThunk (ThunkF prov m) m (ValueF prov m) where
 
@@ -311,7 +315,7 @@ instance
 --
 -- Uses instrumented lookupVar that can record scope stats when enabled.
 instance
-  ( MonadReader (Context cfg m (ValueF prov m)) m
+  ( MonadReader (Context cfg m (ValueF prov m) (StdInterned prov m)) m
   , MonadIO m
   , SBoolI prov
   )
@@ -325,7 +329,7 @@ instance
 -- | Instrumented lookupVar for ValueF that records scope stats when enabled.
 lookupVarWithStatsF
   :: forall prov cfg m
-  . ( MonadReader (Context cfg m (ValueF prov m)) m
+  . ( MonadReader (Context cfg m (ValueF prov m) (StdInterned prov m)) m
     , MonadIO m
     , SBoolI prov
     )
@@ -366,7 +370,7 @@ instance
   , Typeable m
   , SBoolI prov
   , Scoped (ValueF prov m) m
-  , MonadReader (Context cfg m (ValueF prov m)) m
+  , MonadReader (Context cfg m (ValueF prov m) (StdInterned prov m)) m
   , MonadState (HashMap Path NExprLoc, HashMap Text Text) m
   , MonadDataErrorContext (ThunkF prov m) (CitedF prov m) m
   , MonadThunk (ThunkF prov m) m (ValueF prov m)
@@ -393,7 +397,7 @@ instance
   , Typeable m
   , Typeable prov
   , SBoolI prov
-  , MonadReader (Context cfg m (ValueF prov m)) m
+  , MonadReader (Context cfg m (ValueF prov m) (StdInterned prov m)) m
   , MonadThunkId m
   , MonadThunk (ThunkF prov m) m (ValueF prov m)
   )
@@ -446,7 +450,7 @@ instance
 newtype StandardTF (prov :: Bool) (cfg :: EvalCfg) r m a
   = StandardTF
       (ReaderT
-        (Context cfg r (ValueF prov r))
+        (Context cfg r (ValueF prov r) (StdInterned prov r))
         (StateT (HashMap Path NExprLoc, HashMap Text Text) m)
         a
       )
@@ -463,7 +467,7 @@ newtype StandardTF (prov :: Bool) (cfg :: EvalCfg) r m a
     , MonadThrow
     , MonadMask
     , MonadState (HashMap Path NExprLoc, HashMap Text Text)
-    , MonadReader (Context cfg r (ValueF prov r))
+    , MonadReader (Context cfg r (ValueF prov r) (StdInterned prov r))
     )
 
 instance MonadTrans (StandardTF prov cfg r) where
@@ -504,7 +508,7 @@ instance MonadThunkId m
 
 mkStandardT
   :: ReaderT
-      (Context cfg (StandardT prov cfg m) (ValueF prov (StandardT prov cfg m)))
+      (Context cfg (StandardT prov cfg m) (ValueF prov (StandardT prov cfg m)) (StdInterned prov (StandardT prov cfg m)))
       (StateT (HashMap Path NExprLoc, HashMap Text Text) m)
       a
   -> StandardT prov cfg m a
@@ -514,26 +518,26 @@ mkStandardT = coerce
 runStandardT
   :: StandardT prov cfg m a
   -> ReaderT
-      (Context cfg (StandardT prov cfg m) (ValueF prov (StandardT prov cfg m)))
+      (Context cfg (StandardT prov cfg m) (ValueF prov (StandardT prov cfg m)) (StdInterned prov (StandardT prov cfg m)))
       (StateT (HashMap Path NExprLoc, HashMap Text Text) m)
       a
 runStandardT = coerce
 {-# INLINABLE runStandardT #-}
 
 runWithBasicEffectsAndStats
-  :: (MonadIO m, MonadAtomicRef m)
+  :: (MonadIO m, MonadAtomicRef m, SBoolI prov)
   => Options
   -> Maybe EvalStats
   -> StandardT prov cfg (StdIdT m) a
   -> m a
 runWithBasicEffectsAndStats opts mstats =
-  fun . (`evalStateT` mempty) . (`runReaderT` newContextWithStats opts mstats) . runStandardT
+  fun . (`evalStateT` mempty) . (`runReaderT` newContextWithInterned opts mstats mkInternedValues) . runStandardT
  where
   fun action =
     runFreshIdT action =<< newRef (1 :: Int)
 
 runWithBasicEffects
-  :: (MonadIO m, MonadAtomicRef m)
+  :: (MonadIO m, MonadAtomicRef m, SBoolI prov)
   => Options
   -> StandardT prov cfg (StdIdT m) a
   -> m a
