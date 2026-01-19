@@ -612,6 +612,91 @@ hnix --eval --expr "import <nixpkgs> {}" --find
 **In Progress**: Full Nixpkgs evaluation, performance optimization
 **Known Issues**: Tests disabled by default (`doCheck = false`) due to store interaction
 
+## Backpack Infrastructure (In Progress)
+
+HNix is being modularized using GHC Backpack for compile-time swapping of data structure implementations with guaranteed monomorphization.
+
+### Package Structure
+
+```
+hnix/
+├── hnix-types/                      # Shared fundamental types
+│   └── src/Nix/Types/
+│       ├── Path.hs                  # Filesystem path type
+│       ├── VarName.hs               # Interned variable names
+│       ├── SourcePos.hs             # Source position tracking
+│       └── Atom.hs                  # Atomic literals
+│
+├── signatures/                      # Backpack signatures (abstract interfaces)
+│   ├── hnix-attrset-sig/            # AttrSet operations signature
+│   │   └── Nix/AttrSet/Sig.hsig
+│   └── hnix-list-sig/               # NixList operations signature
+│       └── Nix/List/Sig.hsig
+│
+├── implementations/                 # Concrete implementations
+│   ├── hnix-attrset-hashmap/        # HashMap-backed AttrSet
+│   │   └── src/Nix/AttrSet/HashMap.hs
+│   └── hnix-list-vector/            # Vector-backed NixList
+│       └── src/Nix/List/Vector.hs
+│
+└── (main hnix package)              # Uses implementations via mixins
+```
+
+### Building Individual Packages
+
+```bash
+# Build shared types
+nix develop ".?submodules=1#" --command cabal build hnix-types
+
+# Build implementations
+nix develop ".?submodules=1#" --command cabal build hnix-attrset-hashmap hnix-list-vector
+
+# Build main library (still works independently)
+nix develop ".?submodules=1#" --command cabal build lib:hnix
+```
+
+### Why Backpack
+
+| Aspect | Typeclasses | Backpack |
+|--------|-------------|----------|
+| Specialization | Requires INLINABLE + SPECIALIZE pragmas | **Automatic** at link time |
+| Dictionary passing | Can occur if GHC misses specialization | **Never** - concrete types |
+| Maintenance burden | Must verify with inspection tests | Write signature once |
+
+### Current Status
+
+**Completed:**
+- `hnix-types` package with Path, VarName, NSourcePos, NAtom
+- `hnix-attrset-sig` signature defining AttrSet interface
+- `hnix-list-sig` signature defining NixList interface
+- `hnix-attrset-hashmap` HashMap implementation
+- `hnix-list-vector` Vector implementation
+- All packages build successfully
+
+**Next Steps:**
+1. Create `hnix-core` indefinite package that uses signatures
+2. Migrate core modules to import from signatures
+3. Update main `hnix` package to use mixins for instantiation
+4. Add alternative implementations (Map, Seq) for benchmarking
+
+### Migration Guide
+
+When migrating modules to use Backpack:
+
+```haskell
+-- Before: Direct HashMap import
+import qualified Data.HashMap.Strict as HM
+type AttrSet = HashMap VarName
+
+-- After: Import from signature
+import Nix.AttrSet.Sig  -- Provides abstract AttrSet type
+
+-- Operations stay the same
+lookup, insert, union, mapWithKey, etc.
+```
+
+The signature modules export the same API as HashMap/Vector, so migration is mostly mechanical renaming.
+
 ## Resources
 
 - [Win for Recursion Schemes](https://newartisans.com/2018/04/win-for-recursion-schemes/) - Essential architectural context

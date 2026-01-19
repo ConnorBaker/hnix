@@ -1,0 +1,20 @@
+cabal-version:  3.0
+name:           hnix-list-sig
+version:        0.17.0
+synopsis:       Backpack signature for HNix list operations
+description:    Defines the abstract interface for list/sequence operations.
+                Implementations can use Vector, Seq, or regular lists.
+category:       System, Data, Nix
+license:        BSD-3-Clause
+license-file:   ../../License
+build-type:     Simple
+
+library
+  default-language: Haskell2010
+  signatures:
+    Nix.List.Sig
+  build-depends:
+      base >= 4.12 && < 5
+    , deepseq >= 1.4.3
+  ghc-options:
+    -Wall

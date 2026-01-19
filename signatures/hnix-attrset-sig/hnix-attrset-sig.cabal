@@ -1,0 +1,22 @@
+cabal-version:  3.0
+name:           hnix-attrset-sig
+version:        0.17.0
+synopsis:       Backpack signature for HNix attribute set operations
+description:    Defines the abstract interface for attribute set operations.
+                Implementations can use HashMap, Map, or other data structures.
+category:       System, Data, Nix
+license:        BSD-3-Clause
+license-file:   ../../License
+build-type:     Simple
+
+library
+  default-language: Haskell2010
+  signatures:
+    Nix.AttrSet.Sig
+  build-depends:
+      base >= 4.12 && < 5
+    , deepseq >= 1.4.3
+    , hashable >= 1.2.5
+    , hnix-types
+  ghc-options:
+    -Wall

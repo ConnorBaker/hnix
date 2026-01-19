@@ -1,0 +1,45 @@
+cabal-version:  3.0
+name:           hnix-list-vector
+version:        0.17.0
+synopsis:       Vector implementation for HNix NixList signature
+description:    Provides a Vector-backed implementation of the NixList signature.
+                Offers O(1) length and indexing, ideal for Nix list operations.
+category:       System, Data, Nix
+license:        BSD-3-Clause
+license-file:   ../../License
+build-type:     Simple
+
+flag strict
+  description: Enable Strict language extension globally
+  manual: True
+  default: True
+
+library
+  default-language: Haskell2010
+  default-extensions:
+      NoImplicitPrelude
+    , OverloadedStrings
+    , DeriveGeneric
+    , DeriveFunctor
+    , DeriveFoldable
+    , DeriveTraversable
+    , FlexibleContexts
+    , FlexibleInstances
+    , ScopedTypeVariables
+    , TypeApplications
+    , LambdaCase
+    , BangPatterns
+  if flag(strict)
+    default-extensions:
+      Strict
+  exposed-modules:
+    Nix.List.Vector
+  hs-source-dirs:
+    src
+  build-depends:
+      base >= 4.12 && < 5
+    , deepseq >= 1.4.3
+    , relude >= 1.0.0
+    , vector >= 0.12.0
+  ghc-options:
+    -Wall

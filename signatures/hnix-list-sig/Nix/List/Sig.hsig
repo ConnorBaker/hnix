@@ -1,0 +1,80 @@
+-- | Backpack signature for NixList operations.
+--
+-- This signature defines the abstract interface for lists in HNix.
+-- Implementations can provide Vector, Seq, or regular lists while
+-- guaranteeing monomorphization at link time (no dictionary passing).
+signature Nix.List.Sig where
+
+import Control.DeepSeq (NFData)
+
+-- | Abstract list type for Nix list values.
+-- The concrete implementation is selected at link time via Backpack mixins.
+data NixList a
+
+-- * Core operations
+
+-- | Get the length of the list.
+nlLength :: NixList a -> Int
+
+-- | Safe indexing by position. Returns Nothing if index is out of bounds.
+nlIndex :: NixList a -> Int -> Maybe a
+
+-- | Check if the list is empty.
+nlNull :: NixList a -> Bool
+
+-- | Decompose into head and tail. Returns Nothing if empty.
+nlUncons :: NixList a -> Maybe (a, NixList a)
+
+-- | Prepend an element.
+nlCons :: a -> NixList a -> NixList a
+
+-- | Append an element.
+nlSnoc :: NixList a -> a -> NixList a
+
+-- | Concatenate two lists.
+nlAppend :: NixList a -> NixList a -> NixList a
+
+-- * Conversion
+
+-- | Build a list from a Haskell list.
+nlFromList :: [a] -> NixList a
+
+-- | Convert to a Haskell list.
+nlToList :: NixList a -> [a]
+
+-- * Higher-order operations
+
+-- | Map a function over elements.
+nlMap :: (a -> b) -> NixList a -> NixList b
+
+-- | Filter elements by a predicate.
+nlFilter :: (a -> Bool) -> NixList a -> NixList a
+
+-- | Traverse with an applicative effect.
+nlTraverse :: Applicative m => (a -> m b) -> NixList a -> m (NixList b)
+
+-- | Reverse the list.
+nlReverse :: NixList a -> NixList a
+
+-- | The empty list.
+nlEmpty :: NixList a
+
+-- | Strict left fold.
+nlFoldl' :: (b -> a -> b) -> b -> NixList a -> b
+
+-- | Get the head, if non-empty.
+nlHead :: NixList a -> Maybe a
+
+-- | Get the tail, if non-empty.
+nlTail :: NixList a -> Maybe (NixList a)
+
+-- * Required instances
+
+instance Functor NixList
+instance Foldable NixList
+instance Traversable NixList
+instance Eq a => Eq (NixList a)
+instance Show a => Show (NixList a)
+instance Semigroup (NixList a)
+instance Monoid (NixList a)
+instance NFData a => NFData (NixList a)

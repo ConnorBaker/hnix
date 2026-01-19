@@ -1,0 +1,101 @@
+-- | Backpack signature for AttrSet operations.
+--
+-- This signature defines the abstract interface for attribute sets in HNix.
+-- Implementations can provide HashMap, Map, or other backing stores while
+-- guaranteeing monomorphization at link time (no dictionary passing).
+signature Nix.AttrSet.Sig where
+
+import Nix.Types.VarName (VarName)
+import Control.DeepSeq (NFData)
+import Data.Hashable (Hashable)
+
+-- | Abstract attribute set type.
+-- The concrete implementation is selected at link time via Backpack mixins.
+data AttrSet a
+
+-- * Core operations
+
+-- | The empty attribute set.
+empty :: AttrSet a
+
+-- | Create a singleton attribute set.
+singleton :: VarName -> a -> AttrSet a
+
+-- | Insert a key-value pair, replacing any existing value.
+insert :: VarName -> a -> AttrSet a -> AttrSet a
+
+-- | Delete a key from the set.
+delete :: VarName -> AttrSet a -> AttrSet a
+
+-- | Look up a value by key.
+lookup :: VarName -> AttrSet a -> Maybe a
+
+-- | Check if a key is present.
+member :: VarName -> AttrSet a -> Bool
+
+-- * Bulk operations
+
+-- | Left-biased union of two attribute sets.
+union :: AttrSet a -> AttrSet a -> AttrSet a
+
+-- | Union with a combining function for duplicate keys.
+unionWith :: (a -> a -> a) -> AttrSet a -> AttrSet a -> AttrSet a
+
+-- | Intersection of two attribute sets (keep left values).
+intersection :: AttrSet a -> AttrSet b -> AttrSet a
+
+-- | Difference of two attribute sets.
+difference :: AttrSet a -> AttrSet b -> AttrSet a
+
+-- * Conversion
+
+-- | Build an attribute set from a list of key-value pairs.
+-- Later values override earlier ones for duplicate keys.
+fromList :: [(VarName, a)] -> AttrSet a
+
+-- | Convert to a list of key-value pairs.
+toList :: AttrSet a -> [(VarName, a)]
+
+-- | Get all keys.
+keys :: AttrSet a -> [VarName]
+
+-- | Get all values.
+elems :: AttrSet a -> [a]
+
+-- * Properties
+
+-- | Check if empty.
+null :: AttrSet a -> Bool
+
+-- | Number of key-value pairs.
+size :: AttrSet a -> Int
+
+-- * Higher-order operations
+
+-- | Map a function over values, with access to keys.
+mapWithKey :: (VarName -> a -> b) -> AttrSet a -> AttrSet b
+
+-- | Traverse with an applicative effect, with access to keys.
+traverseWithKey :: Applicative f => (VarName -> a -> f b) -> AttrSet a -> f (AttrSet b)
+
+-- | Strict left fold with key access.
+foldlWithKey' :: (b -> VarName -> a -> b) -> b -> AttrSet a -> b
+
+-- | Filter by predicate on key and value.
+filterWithKey :: (VarName -> a -> Bool) -> AttrSet a -> AttrSet a
+
+-- | Modify the value at a key, or insert/delete.
+-- This is the fundamental operation for lens-style updates.
+alterF :: Functor f => (Maybe a -> f (Maybe a)) -> VarName -> AttrSet a -> f (AttrSet a)
+
+-- * Required instances
+
+instance Functor AttrSet
+instance Foldable AttrSet
+instance Traversable AttrSet
+instance Eq a => Eq (AttrSet a)
+instance Show a => Show (AttrSet a)
+instance Semigroup (AttrSet a)
+instance Monoid (AttrSet a)
+instance NFData a => NFData (AttrSet a)
+instance Hashable a => Hashable (AttrSet a)
