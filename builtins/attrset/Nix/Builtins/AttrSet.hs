@@ -42,13 +42,9 @@ module Nix.Builtins.AttrSet
 
 import           Relude hiding (head, tail)
 import           Data.Foldable                  ( foldr' )
-import qualified Data.Text as Text
 import           Control.Monad.Catch            ( MonadThrow )
 
--- Import from concrete value-core and abstract attrset/list signatures
-import           Nix.AttrSet.Sig                ( AttrSet )
-import           Nix.List.Sig                   ( NixList )
-import qualified Nix.List.Sig as L
+-- Import from concrete value-core - all operations via Protocol for correct type identity
 import           Nix.Core.Value.Protocol        ( NValue )
 import qualified Nix.Core.Value.Protocol       as V
 import           Nix.Types.VarName              ( VarName, varNameText, mkVarName )
@@ -126,7 +122,7 @@ attrNamesNix nvset = do
           -- Get sorted keys and convert to string values
           let sortedKeys = sort $ V.attrSetKeys attrs
           let strings = map (V.mkStringNoContext . varNameText) sortedKeys
-          pure $ V.mkList $ L.fromList strings
+          pure $ V.mkList $ V.listFromList strings
 
 -- | Get attribute values from a set as a list.
 -- Fast path: returns interned empty list for empty set.
@@ -144,7 +140,7 @@ attrValuesNix nvattrs = do
           -- Get values sorted by key
           let sortedPairs = sortOn fst $ V.attrSetToList attrs
           let values = map snd sortedPairs
-          pure $ V.mkList $ L.fromList values
+          pure $ V.mkList $ V.listFromList values
 
 -- * Transformations
 
@@ -191,7 +187,7 @@ catAttrsNix attrName xs = do
               -- Traverse the list, extracting the attribute from each attrset
               let key = mkVarName n
               maybeVals <- traverse (extractAttrFromSet key) v
-              let result = L.fromList $ catMaybes $ L.toList maybeVals
+              let result = V.listFromList $ catMaybes $ V.listToList maybeVals
               if V.listNull result
                 then pure V.internedEmptyList
                 else pure $ V.mkList result

@@ -36,6 +36,17 @@ module Nix.Core.Value.Protocol
   , listFilterM
   , listFoldM'
   , listGenListM
+  , listPartitionM
+  , listEmpty
+  , listSingleton
+  , listUncons
+  , listCons
+  , listSnoc
+  , listAppend
+  , listFromList
+  , listToList
+  , listReverse
+  , listUnsafeTail
     -- * AttrSet type (re-exported from signature)
   , AttrSet
     -- * AttrSet operations (re-exported from signature)
@@ -58,6 +69,11 @@ module Nix.Core.Value.Protocol
   , attrSetTraverseWithKey
   , attrSetFoldlWithKey'
   , attrSetFilterWithKey
+  , attrSetSingleton
+  , attrSetInsertWith
+  , attrSetIntersectionWith
+  , attrSetMapMaybe
+  , attrSetAlterF
     -- * Value extraction
   , extractList
   , extractInt
@@ -97,7 +113,6 @@ module Nix.Core.Value.Protocol
 import           Relude hiding (empty)
 import           GHC.Exception                  ( ErrorCall(..) )
 import           Control.Monad.Catch            ( MonadThrow, throwM )
-import           Data.Text                      ( Text )
 
 import           Nix.Types.Atom                 ( NAtom(..) )
 import           Nix.Types.VarName              ( VarName )
@@ -359,6 +374,61 @@ listGenListM :: Monad m => Int -> (Int -> m a) -> m (NixList a)
 listGenListM = L.genListM
 {-# INLINE listGenListM #-}
 
+-- | Partition a list by a monadic predicate.
+listPartitionM :: Monad m => (a -> m Bool) -> NixList a -> m (NixList a, NixList a)
+listPartitionM = L.partitionM
+{-# INLINE listPartitionM #-}
+
+-- | The empty list.
+listEmpty :: NixList a
+listEmpty = L.empty
+{-# INLINE listEmpty #-}
+
+-- | Create a singleton list.
+listSingleton :: a -> NixList a
+listSingleton = L.singleton
+{-# INLINE listSingleton #-}
+
+-- | Decompose into head and tail.
+listUncons :: NixList a -> Maybe (a, NixList a)
+listUncons = L.uncons
+{-# INLINE listUncons #-}
+
+-- | Prepend an element.
+listCons :: a -> NixList a -> NixList a
+listCons = L.cons
+{-# INLINE listCons #-}
+
+-- | Append an element.
+listSnoc :: NixList a -> a -> NixList a
+listSnoc = L.snoc
+{-# INLINE listSnoc #-}
+
+-- | Concatenate two lists.
+listAppend :: NixList a -> NixList a -> NixList a
+listAppend = L.append
+{-# INLINE listAppend #-}
+
+-- | Build a list from a Haskell list.
+listFromList :: [a] -> NixList a
+listFromList = L.fromList
+{-# INLINE listFromList #-}
+
+-- | Convert to a Haskell list.
+listToList :: NixList a -> [a]
+listToList = L.toList
+{-# INLINE listToList #-}
+
+-- | Reverse the list.
+listReverse :: NixList a -> NixList a
+listReverse = L.reverse
+{-# INLINE listReverse #-}
+
+-- | Unsafe tail - undefined behavior if list is empty.
+listUnsafeTail :: NixList a -> NixList a
+listUnsafeTail = L.unsafeTail
+{-# INLINE listUnsafeTail #-}
+
 -- * AttrSet operations (re-exported from signature)
 -- These provide the correct type identity for attrset operations.
 
@@ -456,3 +526,31 @@ attrSetFoldlWithKey' = A.foldlWithKey'
 attrSetFilterWithKey :: (VarName -> a -> Bool) -> AttrSet a -> AttrSet a
 attrSetFilterWithKey = A.filterWithKey
 {-# INLINE attrSetFilterWithKey #-}
+
+-- | Create a singleton attribute set.
+attrSetSingleton :: VarName -> a -> AttrSet a
+attrSetSingleton = A.singleton
+{-# INLINE attrSetSingleton #-}
+
+-- | Insert with a combining function.
+-- @attrSetInsertWith f key new_value set@ inserts @new_value@ if key is absent,
+-- or @f new_value old_value@ if key is present.
+attrSetInsertWith :: (a -> a -> a) -> VarName -> a -> AttrSet a -> AttrSet a
+attrSetInsertWith = A.insertWith
+{-# INLINE attrSetInsertWith #-}
+
+-- | Intersection with a combining function for values.
+attrSetIntersectionWith :: (a -> b -> c) -> AttrSet a -> AttrSet b -> AttrSet c
+attrSetIntersectionWith = A.intersectionWith
+{-# INLINE attrSetIntersectionWith #-}
+
+-- | Map a function over values, discarding Nothing results.
+attrSetMapMaybe :: (a -> Maybe b) -> AttrSet a -> AttrSet b
+attrSetMapMaybe = A.mapMaybe
+{-# INLINE attrSetMapMaybe #-}
+
+-- | Modify the value at a key, or insert/delete.
+-- This is the fundamental operation for lens-style updates.
+attrSetAlterF :: Functor f => (Maybe a -> f (Maybe a)) -> VarName -> AttrSet a -> f (AttrSet a)
+attrSetAlterF = A.alterF
+{-# INLINE attrSetAlterF #-}

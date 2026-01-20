@@ -459,6 +459,110 @@ Look for:
 - Concrete types (Vector, HashMap, Text) instead of abstract types
 - No `GHC.Classes.eq` or similar generic calls
 
+## Signature Evolution Policy
+
+This section provides guidelines for maintaining and evolving the Backpack signatures.
+
+### Adding a New Operation to a Signature
+
+When adding a new operation to an existing signature:
+
+1. **Add to the signature file** (`.hsig`):
+   ```haskell
+   -- In signatures/Nix/List/Sig.hsig
+   myNewOperation :: NixList a -> NixList a
+   ```
+
+2. **Implement in all implementations**:
+   ```haskell
+   -- In implementations/list/Nix/List/Vector.hs
+   myNewOperation :: NixList a -> NixList a
+   myNewOperation (NixList v) = NixList (V.someOperation v)
+   ```
+
+3. **Re-export from Protocol** (for operations used by builtins):
+   ```haskell
+   -- In core/Nix/Core/Value/Protocol.hs
+   listMyNewOperation :: NixList a -> NixList a
+   listMyNewOperation = L.myNewOperation
+   {-# INLINE listMyNewOperation #-}
+   ```
+
+4. **Update Protocol's export list**.
+
+5. **Run inspection tests** to verify monomorphization:
+   ```bash
+   nix develop ".?submodules=1#" --command cabal test hnix-inspection
+   ```
+
+### Adding a New Signature
+
+When adding a completely new abstract type:
+
+1. **Create signature sublibrary** in `hnix.cabal`:
+   ```cabal
+   library hnix-newthing-sig
+     import: shared-sublibrary
+     visibility: public
+     hs-source-dirs: signatures
+     exposed-modules: Nix.NewThing.Sig
+     build-depends:
+         base >= 4.12 && < 5
+       , hnix:hnix-types
+   ```
+
+2. **Create `.hsig` file** in `signatures/Nix/NewThing/Sig.hsig`:
+   ```haskell
+   signature Nix.NewThing.Sig where
+
+   data NewThing a
+
+   empty :: NewThing a
+   -- ... other operations
+
+   instance Functor NewThing
+   -- ... required instances
+   ```
+
+3. **Create implementation sublibrary**.
+
+4. **Add signature to indefinite sublibraries** that need it.
+
+5. **Add mixin mappings** in the main library.
+
+### Removing an Operation from a Signature
+
+1. **Check all usages** in the codebase:
+   ```bash
+   grep -r "operationName" core/ builtins/ src/
+   ```
+
+2. **Remove from implementations first**.
+
+3. **Remove from signature**.
+
+4. **Remove from Protocol** (if re-exported).
+
+5. **Verify build passes**.
+
+### Checklist for Signature Changes
+
+- [ ] Signature updated (`signatures/Nix/*/Sig.hsig`)
+- [ ] All implementations updated
+- [ ] Protocol updated (if needed)
+- [ ] Inspection tests pass (`cabal test hnix-inspection`)
+- [ ] Memory benchmarks checked (`cabal bench hnix-weigh`)
+- [ ] Documentation updated
+
+### Common Backpack Limitations to Watch For
+
+| Limitation | Workaround |
+|------------|------------|
+| No pattern synonyms in signatures | Use smart constructors + predicates |
+| No type families in signatures | Use associated types or concrete parameters |
+| Transitive signature requirements | Re-declare signatures in each indefinite package |
+| hsig files have restricted imports | Only import other signatures or concrete types |
+
 ## Future Work
 
 ### Potential Alternative Implementations

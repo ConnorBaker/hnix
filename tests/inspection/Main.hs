@@ -68,6 +68,7 @@ import           Inspection.HasCitations ()
 import           Inspection.Integration ()
 import           Inspection.MonadThunk  ()
 import           Inspection.NixString   ()
+import           Inspection.Protocol    ()
 import           Inspection.Scope       ()
 import           Inspection.Singleton   ()
 import           Inspection.Thunk       ()
@@ -108,6 +109,7 @@ main = do
   putStrLn "  13. Scope     - scopeLookup efficiency"
   putStrLn "  14. NixString - String construction and extraction"
   putStrLn "  15. AttrSet   - Attribute set pattern matching and construction"
+  putStrLn "  16. Protocol  - Protocol operations for builtins (list/attrset)"
   putStrLn ""
   putStrLn "All inspection tests passed!"
   putStrLn "(Actual test counts verified at compile time)"

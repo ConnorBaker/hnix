@@ -299,6 +299,7 @@ library hnix-core
     Nix.Core.List
     Nix.Core.Expr.Types
     Nix.Core.Scope
+    Nix.Core.Types
     Nix.Core.Utils
     -- Value system (from hnix-value-core, renamed)
     Nix.Core.Value
@@ -655,6 +656,7 @@ test-suite hnix-inspection
     Inspection.Integration
     Inspection.MonadThunk
     Inspection.NixString
+    Inspection.Protocol
     Inspection.Scope
     Inspection.Singleton
     Inspection.Thunk

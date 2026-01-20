@@ -48,9 +48,8 @@ import           Relude hiding (head, tail)
 import qualified Data.Text as Text
 import           Control.Monad.Catch            ( MonadThrow )
 
--- Import from concrete value-core and abstract list signature
-import           Nix.List.Sig                   ( NixList )
-import           Nix.Core.Value.Protocol        ( NValue )
+-- Import from concrete value-core - all operations via Protocol for correct type identity
+import           Nix.Core.Value.Protocol        ( NValue, NixList )
 import qualified Nix.Core.Value.Protocol       as V
 
 -- * Constraint aliases
