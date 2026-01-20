@@ -524,7 +524,7 @@ nixPathNix =
     $ foldNixPath mempty $
         \p mn ty rest ->
           pure $
-            L.nlSingleton
+            L.singleton
               (NVSet
                 mempty
                 (NixA.fromList
@@ -564,7 +564,7 @@ fromJSONNix nvjson =
 #else
           (NixA.fromList [(mkVarName k, v) | (k, v) <- HM.toList m])
 #endif
-      A.Array  l -> NVList . L.nlFromList <$> traverse jsonToNValue (toList l)
+      A.Array  l -> NVList . L.fromList <$> traverse jsonToNValue (toList l)
       A.String s -> pure $ mkNVStrWithoutContext s
       A.Number n ->
         pure $
@@ -601,7 +601,7 @@ fromTOMLNix nvtoml = do
     Toml.Double' _ d  -> pure $ NVConstant $ NFloat (realToFrac d)
     Toml.Bool' _ b    -> pure $ internedBool b
     Toml.Text' _ t    -> pure $ mkNVStrWithoutContext t
-    Toml.List' _ xs   -> NVList <$> traverse tomlToNValue (L.nlFromList xs)
+    Toml.List' _ xs   -> NVList <$> traverse tomlToNValue (L.fromList xs)
     Toml.Table' _ t   -> tableToNValue t
     -- Date/time types: convert to { _type = "timestamp"; value = "..."; }
     Toml.Day' _ d         -> mkTimestamp $ formatDay d

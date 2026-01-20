@@ -1,8 +1,12 @@
 -- | Backpack signature for NixList operations.
 --
 -- This signature defines the abstract interface for lists in HNix.
+-- Function names match Nix's builtin list operations where applicable.
 -- Implementations can provide Vector, Seq, or regular lists while
 -- guaranteeing monomorphization at link time (no dictionary passing).
+--
+-- Note: For pure folds, use the Foldable instance (foldl', foldr, etc.)
+-- The monadic versions here are for Nix builtins that take Nix closures.
 signature Nix.List.Sig where
 
 import Control.DeepSeq (NFData)
@@ -14,106 +18,79 @@ import Data.Semialign (Align, Semialign)
 -- The concrete implementation is selected at link time via Backpack mixins.
 data NixList a
 
+-- * Nix builtin equivalents (monadic)
+-- These are for Nix builtins that take Nix closures as arguments.
+
+-- | Monadic filter by a predicate. For @builtins.filter@.
+filterM :: Monad m => (a -> m Bool) -> NixList a -> m (NixList a)
+
+-- | Strict monadic left fold. For @builtins.foldl'@.
+foldM' :: Monad m => (b -> a -> m b) -> b -> NixList a -> m b
+
+-- | Monadic generation of a list. For @builtins.genList@.
+genListM :: Monad m => Int -> (Int -> m a) -> m (NixList a)
+
+-- | Partition a list by a monadic predicate. For @builtins.partition@.
+partitionM :: Monad m => (a -> m Bool) -> NixList a -> m (NixList a, NixList a)
+
 -- * Core operations
 
--- | Get the length of the list.
-nlLength :: NixList a -> Int
-
--- | Safe indexing by position. Returns Nothing if index is out of bounds.
-nlIndex :: NixList a -> Int -> Maybe a
-
--- | Unsafe indexing by position. Behavior undefined if index out of bounds.
-nlUnsafeIndex :: NixList a -> Int -> a
+-- | The empty list.
+empty :: NixList a
 
 -- | Check if the list is empty.
-nlNull :: NixList a -> Bool
+null :: NixList a -> Bool
 
--- | Decompose into head and tail. Returns Nothing if empty.
-nlUncons :: NixList a -> Maybe (a, NixList a)
+-- | Get the length of the list.
+length :: NixList a -> Int
 
--- | Prepend an element.
-nlCons :: a -> NixList a -> NixList a
+-- | Safe indexing by position. Equivalent to @builtins.elemAt@.
+-- Returns Nothing if index is out of bounds.
+elemAt :: NixList a -> Int -> Maybe a
 
--- | Append an element.
-nlSnoc :: NixList a -> a -> NixList a
+-- | Unsafe indexing by position.
+-- Behavior undefined if index is out of bounds.
+unsafeElemAt :: NixList a -> Int -> a
 
--- | Concatenate two lists.
-nlAppend :: NixList a -> NixList a -> NixList a
+-- | Get the first element. Equivalent to @builtins.head@.
+-- Returns Nothing if empty.
+head :: NixList a -> Maybe a
 
--- * Conversion
-
--- | Build a list from a Haskell list.
-nlFromList :: [a] -> NixList a
-
--- | Convert to a Haskell list.
-nlToList :: NixList a -> [a]
-
--- * Higher-order operations
-
--- | Map a function over elements.
-nlMap :: (a -> b) -> NixList a -> NixList b
-
--- | Monadic map over elements.
-nlMapM :: Monad m => (a -> m b) -> NixList a -> m (NixList b)
-
--- | Filter elements by a predicate.
-nlFilter :: (a -> Bool) -> NixList a -> NixList a
-
--- | Monadic filter by a predicate.
-nlFilterM :: Monad m => (a -> m Bool) -> NixList a -> m (NixList a)
-
--- | Filter and transform simultaneously.
-nlMapMaybe :: (a -> Maybe b) -> NixList a -> NixList b
-
--- | Traverse with an applicative effect.
-nlTraverse :: Applicative m => (a -> m b) -> NixList a -> m (NixList b)
-
--- | Reverse the list.
-nlReverse :: NixList a -> NixList a
-
--- | The empty list.
-nlEmpty :: NixList a
-
--- | Strict left fold.
-nlFoldl' :: (b -> a -> b) -> b -> NixList a -> b
-
--- | Strict monadic left fold.
-nlFoldM' :: Monad m => (b -> a -> m b) -> b -> NixList a -> m b
-
--- | Lazy right fold.
-nlFoldr :: (a -> b -> b) -> b -> NixList a -> b
-
--- | Get the head, if non-empty.
-nlHead :: NixList a -> Maybe a
-
--- | Get the tail, if non-empty.
-nlTail :: NixList a -> Maybe (NixList a)
-
--- | Generate a list of given length using a function on indices.
-nlGenerate :: Int -> (Int -> a) -> NixList a
-
--- | Monadic generation of a list.
-nlGenerateM :: Monad m => Int -> (Int -> m a) -> m (NixList a)
-
--- | Concatenate a list of lists.
-nlConcat :: [NixList a] -> NixList a
-
--- | Create a singleton list.
-nlSingleton :: a -> NixList a
+-- | Get all elements except the first. Equivalent to @builtins.tail@.
+-- Returns Nothing if empty.
+tail :: NixList a -> Maybe (NixList a)
 
 -- | Unsafe tail - undefined behavior if list is empty.
-nlUnsafeTail :: NixList a -> NixList a
+unsafeTail :: NixList a -> NixList a
 
--- | Strict right fold.
-nlFoldr' :: (a -> b -> b) -> b -> NixList a -> b
+-- | Create a singleton list.
+singleton :: a -> NixList a
 
--- | Partition a list by a predicate.
-nlPartition :: (a -> Bool) -> NixList a -> (NixList a, NixList a)
+-- | Decompose into head and tail. Returns Nothing if empty.
+uncons :: NixList a -> Maybe (a, NixList a)
 
--- | Partition a list by a monadic predicate.
-nlPartitionM :: Monad m => (a -> m Bool) -> NixList a -> m (NixList a, NixList a)
+-- | Prepend an element.
+cons :: a -> NixList a -> NixList a
+
+-- | Append an element.
+snoc :: NixList a -> a -> NixList a
+
+-- | Concatenate two lists.
+append :: NixList a -> NixList a -> NixList a
+
+-- | Build a list from a Haskell list.
+fromList :: [a] -> NixList a
+
+-- | Convert to a Haskell list.
+toList :: NixList a -> [a]
+
+-- | Reverse the list.
+reverse :: NixList a -> NixList a
 
 -- * Required instances
+-- Use Foldable for foldl', foldr, foldr', length, null, etc.
+-- Use Traversable for traverse.
+-- Use Functor for fmap.
 
 instance Functor NixList
 instance Foldable NixList

@@ -48,8 +48,10 @@ member :: VarName -> AttrSet a -> Bool
 
 -- * Bulk operations
 
--- | Left-biased union of two attribute sets.
-union :: AttrSet a -> AttrSet a -> AttrSet a
+-- | Right-biased union of two attribute sets.
+-- When both sets contain the same key, the value from the right (second)
+-- argument is kept. This matches Nix's @//@ (update) operator semantics.
+unionRight :: AttrSet a -> AttrSet a -> AttrSet a
 
 -- | Union with a combining function for duplicate keys.
 unionWith :: (a -> a -> a) -> AttrSet a -> AttrSet a -> AttrSet a

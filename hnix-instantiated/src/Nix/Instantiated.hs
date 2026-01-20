@@ -32,7 +32,7 @@ demoAttrSet = fromList
 
 -- | Demo function showing NixList operations work.
 demoList :: NixList Int
-demoList = nlFromList [1, 2, 3, 4, 5]
+demoList = fromList [1, 2, 3, 4, 5]
 
 -- | Demo function showing PositionSet works.
 demoPositionSet :: PositionSet

@@ -199,7 +199,7 @@ fetchurlNix =
       case getStringNoContext ns of
         Nothing -> throwError $ ErrorCall "builtins.fetchurl: unsupported arguments to url"
         Just v -> pure $ pure v
-    NVList vs -> L.nlToList <$> L.nlMapM (extractUrl <=< demand) vs
+    NVList vs -> L.toList <$> traverse (extractUrl <=< demand) vs
     v -> throwError $ ErrorCall $ "builtins.fetchurl: Expected URI or list of URIs, got " <> show v
 
   extractUrl :: NValue t f m -> m Text
@@ -231,5 +231,5 @@ execNix xs = do
   -- See prim_exec in nix/src/libexpr/primops.cc
   -- Requires the implementation of EvalState::realiseContext
   v <- fromValue @(NixList (NValue t f m)) xs
-  strs <- L.nlMapM (coerceStringlikeToNixString DontCopyToStore) v
-  exec $ V.fromList $ ignoreContext <$> L.nlToList strs
+  strs <- traverse (coerceStringlikeToNixString DontCopyToStore) v
+  exec $ V.fromList $ ignoreContext <$> L.toList strs

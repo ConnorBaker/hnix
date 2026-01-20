@@ -380,7 +380,7 @@ withNixContext mpath action =
     opts <- askOptions
 
     pushScope
-      (one ("__includes", NVList $ L.nlFromList $ mkNVStrWithoutContext . fromString . coerce <$> getInclude opts))
+      (one ("__includes", NVList $ L.fromList $ mkNVStrWithoutContext . fromString . coerce <$> getInclude opts))
       (pushScopes
         base $
         case mpath of

@@ -21,7 +21,7 @@ module Nix.AttrSet.HashMap
   , lookup
   , member
   -- Bulk operations
-  , union
+  , unionRight
   , unionWith
   , insertWith
   , intersection
@@ -247,9 +247,11 @@ member k (AttrSet m) = HM.member k m
 
 -- * Bulk operations
 
-union :: AttrSet a -> AttrSet a -> AttrSet a
-union (AttrSet m1) (AttrSet m2) = AttrSet (HM.union m1 m2)
-{-# INLINE union #-}
+-- | Right-biased union: values from the second argument win for duplicate keys.
+-- This matches Nix's @//@ operator semantics.
+unionRight :: AttrSet a -> AttrSet a -> AttrSet a
+unionRight (AttrSet m1) (AttrSet m2) = AttrSet (HM.union m2 m1)
+{-# INLINE unionRight #-}
 
 unionWith :: (a -> a -> a) -> AttrSet a -> AttrSet a -> AttrSet a
 unionWith f (AttrSet m1) (AttrSet m2) = AttrSet (HM.unionWith f m1 m2)

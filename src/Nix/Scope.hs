@@ -108,27 +108,27 @@ attrSetKeys = A.keys
 -- | NixList operations re-exported for modules that can't import hnix-core directly.
 -- These are needed by the executable and tests.
 nixListFromList :: [a] -> NixList a
-nixListFromList = L.nlFromList
+nixListFromList = L.fromList
 {-# INLINE nixListFromList #-}
 
 nixListToList :: NixList a -> [a]
-nixListToList = L.nlToList
+nixListToList = L.toList
 {-# INLINE nixListToList #-}
 
 nixListLength :: NixList a -> Int
-nixListLength = L.nlLength
+nixListLength = L.length
 {-# INLINE nixListLength #-}
 
 nixListNull :: NixList a -> Bool
-nixListNull = L.nlNull
+nixListNull = L.null
 {-# INLINE nixListNull #-}
 
 nixListIndex :: NixList a -> Int -> Maybe a
-nixListIndex = L.nlIndex
+nixListIndex = L.elemAt
 {-# INLINE nixListIndex #-}
 
 nixListEmpty :: NixList a
-nixListEmpty = L.nlEmpty
+nixListEmpty = L.empty
 {-# INLINE nixListEmpty #-}
 
 scopeLookup :: VarName -> [Scope a] -> Maybe a

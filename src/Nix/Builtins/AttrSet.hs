@@ -28,6 +28,7 @@ module Nix.Builtins.AttrSet
   ) where
 
 import           Nix.Prelude
+import           Data.Foldable                  ( foldr' )
 import           GHC.Exception                  ( ErrorCall(ErrorCall) )
 import qualified Data.HashMap.Strict           as HM
 import qualified Nix.Core.AttrSet              as A
@@ -143,13 +144,13 @@ zipAttrsWithNix f nvSets =
     sets <- fromValue @(NixList (NValue t f m)) =<< demand nvSets
 
     -- Fast path: return interned empty set for empty input
-    if L.nlNull sets
+    if L.null sets
       then pure internedEmptySet
       else do
         -- Collect values by key, accumulating as lists (O(1) prepend) then converting to Vector at end
         -- Uses (++) which prepends [val] to existing list in O(1), building lists in reverse order
         collected <-
-          L.nlFoldM'
+          L.foldM'
             (\ acc v -> do
               v' <- demand v
               case v' of
@@ -172,7 +173,7 @@ zipAttrsWithNix f nvSets =
     defer @(NValue t f m) . withFrame Debug (ErrorCall "While applying f in zipAttrsWith:\n") $ do
       runFunForKey <- callFunc f $ mkNVStrWithoutContext (varNameText key)
       -- Reverse to restore original order (we prepended during accumulation)
-      callFunc runFunForKey (NVList (L.nlReverse (L.nlFromList vals)))
+      callFunc runFunForKey (NVList (L.reverse (L.fromList vals)))
 
 catAttrsNix
   :: forall e t f m
@@ -186,16 +187,16 @@ catAttrsNix attrName xs =
     v <- fromValue @(NixList (NValue t f m)) xs
 
     -- Fast path: return interned empty list for empty input
-    if L.nlNull v
+    if L.null v
       then pure internedEmptyList
       else do
-        -- Use L.nlMapMaybe to filter and transform in one pass
-        result <- L.nlMapMaybe id <$>
-          L.nlMapM
+        -- Filter and transform: collect Just values, discard Nothing
+        maybeVals <- traverse
             (fmap (A.lookup $ mkVarName n) . fromValue <=< demand)
             v
+        let result = L.fromList $ catMaybes $ L.toList maybeVals
         -- Fast path: return interned empty list if result is empty
-        if L.nlNull result
+        if L.null result
           then pure internedEmptyList
           else pure $ NVList result
 
@@ -253,12 +254,12 @@ listToAttrsNix lst =
   do
     v <- fromValue @(NixList (NValue t f m)) lst
     -- Fast path: return interned empty set for empty input
-    if L.nlNull v
+    if L.null v
       then pure internedEmptySet
       else do
         -- Build pairs in order, then use HM.fromList with reversed order
         -- so first occurrence wins (Nix semantics: first key wins)
-        pairs <- L.nlMapM
+        pairs <- traverse
           (\ nvattrset ->
             do
               a <- fromValue @(AttrSet (NValue t f m)) =<< demand nvattrset
@@ -268,5 +269,5 @@ listToAttrsNix lst =
           )
           v
         -- A.fromList keeps the last occurrence, but we want the first.
-        -- Using L.nlFoldr' processes right-to-left, so first occurrence is inserted last and wins.
-        pure $ NVSet emptyPositionSet $ L.nlFoldr' (uncurry A.insert) mempty pairs
+        -- Using foldr' processes right-to-left, so first occurrence is inserted last and wins.
+        pure $ NVSet emptyPositionSet $ foldr' (uncurry A.insert) mempty pairs

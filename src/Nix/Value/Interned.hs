@@ -127,7 +127,7 @@ mkInternedValues = InternedValues
   { internedTrue'        = NVConstant (NBool True)
   , internedFalse'       = NVConstant (NBool False)
   , internedNull'        = NVConstant NNull
-  , internedEmptyList'   = NVList L.nlEmpty
+  , internedEmptyList'   = NVList L.empty
   , internedEmptySet'    = NVSet emptyPositionSet mempty
   , internedEmptyString' = NVStr mempty  -- mempty for NixString is ""
   }

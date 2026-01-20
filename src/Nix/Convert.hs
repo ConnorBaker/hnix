@@ -17,16 +17,6 @@ module Nix.Convert
   ( -- * Core type classes
     FromValue(..)
   , ToValue(..)
-    -- * Interned value helpers
-    -- | These helpers use interned values for common cases.
-    -- Use these at call sites where 'GivenInterned' is available.
-  , toValueBoolInterned
-  , toValueUnitInterned
-  , toValueListInterned
-  , toValueNixListInterned
-  , toValueAttrSetInterned
-  , toValueAttrSetWithPosInterned
-  , toValueNixStringInterned
     -- * Conversion utilities
   , Deeper(..)
   , CoerceDeeperToNValue
@@ -86,7 +76,7 @@ Do not add these instances back!
 
 
 type Convertible e t f m
-  = (Framed e m, MonadDataErrorContext t f m, MonadThunk t m (NValue t f m))
+  = (Framed e m, MonadDataErrorContext t f m, MonadThunk t m (NValue t f m), GivenInterned t f m)
 
 -- | Transform Nix -> Hask. Run function. Convert Hask -> Nix.
 inHask :: forall a1 a2 v b m . (Monad m, FromValue a1 m v, ToValue a2 m b) => (a1 -> a2) -> v -> m b
@@ -326,7 +316,7 @@ instance Convertible e t f m
   fromValueMay =
     pure .
       \case
-        NVList' l -> pure (L.nlToList l)
+        NVList' l -> pure (L.toList l)
         _         -> mempty
 
   fromValue = fromMayToValue TList
@@ -337,7 +327,7 @@ instance ( Convertible e t f m
   => FromValue [a] m (Deeper (NValue' t f m (NValue t f m))) where
   fromValueMay =
     \case
-      Deeper (NVList' l) -> traverseFromValue (L.nlToList l)
+      Deeper (NVList' l) -> traverseFromValue (L.toList l)
       _                  -> stub
 
 
@@ -429,9 +419,19 @@ instance ( Convertible e t f m
   => ToValue a m (Deeper (NValue t f m)) where
   toValue v = Free <<$>> toValue v
 
+-- | Unit converts to interned null.
+instance {-# OVERLAPPING #-} Convertible e t f m
+  => ToValue () m (NValue t f m) where
+  toValue () = pure internedNull
+
 instance Convertible e t f m
   => ToValue () m (NValue' t f m (NValue t f m)) where
   toValue = const $ pure NVNull'
+
+-- | Bool converts to interned true/false.
+instance {-# OVERLAPPING #-} Convertible e t f m
+  => ToValue Bool m (NValue t f m) where
+  toValue = pure . internedBool
 
 instance Convertible e t f m
   => ToValue Bool m (NValue' t f m (NValue t f m)) where
@@ -452,6 +452,13 @@ instance Convertible e t f m
 instance Convertible e t f m
   => ToValue Double m (NValue' t f m (NValue t f m)) where
   toValue = pure . NVConstant' . NFloat
+
+-- | NixString converts to interned empty string when empty and contextless.
+instance {-# OVERLAPPING #-} Convertible e t f m
+  => ToValue NixString m (NValue t f m) where
+  toValue ns
+    | Text.null (ignoreContext ns) && not (hasContext ns) = pure internedEmptyString
+    | otherwise = pure $ NVStr ns
 
 instance Convertible e t f m
   => ToValue NixString m (NValue' t f m (NValue t f m)) where
@@ -494,21 +501,42 @@ instance Convertible e t f m
     let pos = A.fromList [("file" :: VarName, f'), ("line", l'), ("column", c')]
     pure $ NVSet' mempty pos
 
+-- | List converts to interned empty list when empty.
+instance {-# OVERLAPPING #-} Convertible e t f m
+  => ToValue [NValue t f m] m (NValue t f m) where
+  toValue lst = pure $ case lst of
+    [] -> internedEmptyList
+    _  -> NVList (L.fromList lst)
+
 -- | With 'ToValue', we can always act recursively
 instance Convertible e t f m
   => ToValue [NValue t f m] m (NValue' t f m (NValue t f m)) where
-  toValue = pure . NVList' . L.nlFromList
+  toValue = pure . NVList' . L.fromList
 
 instance (Convertible e t f m
   , ToValue a m (NValue t f m)
   )
   => ToValue [a] m (Deeper (NValue' t f m (NValue t f m))) where
-  toValue l = Deeper . NVList' . L.nlFromList <$> traverseToValue l
+  toValue l = Deeper . NVList' . L.fromList <$> traverseToValue l
+
+-- | NixList converts to interned empty list when empty.
+instance {-# OVERLAPPING #-} Convertible e t f m
+  => ToValue (NixList (NValue t f m)) m (NValue t f m) where
+  toValue lst
+    | L.null lst = pure internedEmptyList
+    | otherwise = pure $ NVList lst
 
 -- | NixList instance - O(1) construction, no list conversion!
 instance Convertible e t f m
   => ToValue (NixList (NValue t f m)) m (NValue' t f m (NValue t f m)) where
   toValue = pure . NVList'
+
+-- | AttrSet converts to interned empty set when empty.
+instance {-# OVERLAPPING #-} Convertible e t f m
+  => ToValue (AttrSet (NValue t f m)) m (NValue t f m) where
+  toValue attrs
+    | A.null attrs = pure internedEmptySet
+    | otherwise = pure $ NVSet mempty attrs
 
 instance Convertible e t f m
   => ToValue (AttrSet (NValue t f m)) m (NValue' t f m (NValue t f m)) where
@@ -520,6 +548,13 @@ instance (Convertible e t f m, ToValue a m (NValue t f m))
     liftA2 (\ v s -> Deeper $ NVSet' s v)
       (traverseToValue s)
       stub
+
+-- | AttrSet with positions converts to interned empty set when empty.
+instance {-# OVERLAPPING #-} Convertible e t f m
+  => ToValue (AttrSet (NValue t f m), PositionSet) m (NValue t f m) where
+  toValue (attrs, _pos)
+    | A.null attrs = pure internedEmptySet
+    | otherwise = pure $ NVSet _pos attrs
 
 instance Convertible e t f m
   => ToValue (AttrSet (NValue t f m), PositionSet) m
@@ -564,71 +599,3 @@ instance Convertible e t f m => ToValue () m (NExprF (NValue t f m)) where
 
 instance Convertible e t f m => ToValue Bool m (NExprF (NValue t f m)) where
   toValue = pure . NConstant . NBool
-
-
--- * Interned value helpers
---
--- These helpers use interned values for common cases (empty collections, booleans, null).
--- Use these at call sites where 'GivenInterned' constraint is available.
-
--- | Convert a Bool to NValue using interned true/false values.
-toValueBoolInterned :: GivenInterned t f m => Bool -> NValue t f m
-toValueBoolInterned = internedBool
-{-# INLINE toValueBoolInterned #-}
-
--- | Convert () to NValue using interned null.
-toValueUnitInterned :: GivenInterned t f m => () -> NValue t f m
-toValueUnitInterned () = internedNull
-{-# INLINE toValueUnitInterned #-}
-
--- | Convert a list to NValue, using interned empty list when empty.
-toValueListInterned
-  :: (GivenInterned t f m, Convertible e t f m)
-  => [NValue t f m]
-  -> NValue t f m
-toValueListInterned lst =
-  case lst of
-    [] -> internedEmptyList
-    _  -> NVList (L.nlFromList lst)
-{-# INLINE toValueListInterned #-}
-
--- | Convert a NixList to NValue, using interned empty list when empty.
-toValueNixListInterned
-  :: (GivenInterned t f m, NVConstraint f)
-  => NixList (NValue t f m)
-  -> NValue t f m
-toValueNixListInterned lst
-  | L.nlNull lst = internedEmptyList
-  | otherwise = NVList lst
-{-# INLINE toValueNixListInterned #-}
-
--- | Convert an AttrSet to NValue, using interned empty set when empty.
-toValueAttrSetInterned
-  :: (GivenInterned t f m, NVConstraint f)
-  => AttrSet (NValue t f m)
-  -> NValue t f m
-toValueAttrSetInterned attrs
-  | A.null attrs = internedEmptySet
-  | otherwise = NVSet mempty attrs
-{-# INLINE toValueAttrSetInterned #-}
-
--- | Convert an AttrSet with positions to NValue, using interned empty set when empty.
-toValueAttrSetWithPosInterned
-  :: (GivenInterned t f m, NVConstraint f)
-  => AttrSet (NValue t f m)
-  -> PositionSet
-  -> NValue t f m
-toValueAttrSetWithPosInterned attrs pos
-  | A.null attrs = internedEmptySet
-  | otherwise = NVSet pos attrs
-{-# INLINE toValueAttrSetWithPosInterned #-}
-
--- | Convert a NixString to NValue, using interned empty string when empty.
-toValueNixStringInterned
-  :: (GivenInterned t f m, NVConstraint f)
-  => NixString
-  -> NValue t f m
-toValueNixStringInterned ns
-  | Text.null (ignoreContext ns) && not (hasContext ns) = internedEmptyString
-  | otherwise = NVStr ns
-{-# INLINE toValueNixStringInterned #-}

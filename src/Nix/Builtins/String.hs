@@ -88,7 +88,7 @@ splitVersionNix v =
     version <- fromStringNoContext =<< fromValue v
     pure $
       NVList $
-        L.nlFromList $
+        L.fromList $
           mkNVStrWithoutContext . show <$>
             splitVersion version
 
@@ -176,7 +176,7 @@ matchNix pat str =
       Just ("", sarr, "") ->
         do
           let submatches = elems sarr
-          (NVList . L.nlFromList) <$>
+          (NVList . L.fromList) <$>
             traverse
               mkMatch
               (case submatches of
@@ -209,7 +209,7 @@ splitNix pat str =
       regex = makeRegexOpts nixCompOpt defaultExecOpt p :: Regex
       haystack = encodeUtf8 s
 
-    pure $ NVList $ L.nlFromList $ splitMatches 0 (elems <$> matchAllText regex haystack) haystack
+    pure $ NVList $ L.fromList $ splitMatches 0 (elems <$> matchAllText regex haystack) haystack
 
 
 -- * Substring operations

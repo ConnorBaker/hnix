@@ -59,7 +59,7 @@ toJSON = \case
   NVConstant (NBool  b) -> pure $ A.toJSON b
   NVConstant NNull      -> pure   A.Null
   NVStr      ns         -> A.toJSON <$> extractNixString ns
-  NVList l -> A.Array . V.fromList <$> traverse intoJson (L.nlToList l)
+  NVList l -> A.Array . V.fromList <$> traverse intoJson (L.toList l)
   NVSet pos m ->
     -- First check for __toString, then outPath, then normal object encoding
     case A.lookup (mkVarName "__toString") m of

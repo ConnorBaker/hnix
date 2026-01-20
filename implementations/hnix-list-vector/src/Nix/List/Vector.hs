@@ -13,43 +13,31 @@
 -- is monomorphized - no dictionary passing or indirection.
 module Nix.List.Vector
   ( NixList
+  -- Monadic operations for Nix builtins
+  , filterM
+  , foldM'
+  , genListM
+  , partitionM
   -- Core operations
-  , nlLength
-  , nlIndex
-  , nlUnsafeIndex
-  , nlNull
-  , nlUncons
-  , nlCons
-  , nlSnoc
-  , nlAppend
-  -- Conversion
-  , nlFromList
-  , nlToList
-  -- Higher-order operations
-  , nlMap
-  , nlMapM
-  , nlFilter
-  , nlFilterM
-  , nlMapMaybe
-  , nlTraverse
-  , nlReverse
-  , nlEmpty
-  , nlFoldl'
-  , nlFoldM'
-  , nlFoldr
-  , nlHead
-  , nlTail
-  , nlGenerate
-  , nlGenerateM
-  , nlConcat
-  , nlSingleton
-  , nlUnsafeTail
-  , nlFoldr'
-  , nlPartition
-  , nlPartitionM
+  , empty
+  , null
+  , length
+  , elemAt
+  , unsafeElemAt
+  , head
+  , tail
+  , unsafeTail
+  , singleton
+  , uncons
+  , cons
+  , snoc
+  , append
+  , fromList
+  , toList
+  , reverse
   ) where
 
-import           Relude
+import           Relude hiding (empty, fromList, toList, null, head, tail, reverse, length, filterM, uncons)
 import           Prelude ()
 import           Data.Vector (Vector)
 import qualified Data.Vector as V
@@ -97,141 +85,115 @@ instance Align NixList where
   nil = NixList V.empty
   {-# INLINE nil #-}
 
--- * Core operations
+-- * Monadic operations for Nix builtins
 
-nlLength :: NixList a -> Int
-nlLength (NixList v) = V.length v
-{-# INLINE nlLength #-}
+-- | Monadic filter by a predicate.
+filterM :: Monad m => (a -> m Bool) -> NixList a -> m (NixList a)
+filterM p (NixList v) = NixList <$> V.filterM p v
+{-# INLINE filterM #-}
 
-nlIndex :: NixList a -> Int -> Maybe a
-nlIndex (NixList v) i = v V.!? i
-{-# INLINE nlIndex #-}
+-- | Strict monadic left fold.
+foldM' :: Monad m => (b -> a -> m b) -> b -> NixList a -> m b
+foldM' f z (NixList v) = V.foldM' f z v
+{-# INLINE foldM' #-}
 
-nlUnsafeIndex :: NixList a -> Int -> a
-nlUnsafeIndex (NixList v) i = V.unsafeIndex v i
-{-# INLINE nlUnsafeIndex #-}
+-- | Monadic generation of a list.
+genListM :: Monad m => Int -> (Int -> m a) -> m (NixList a)
+genListM n f = NixList <$> V.generateM n f
+{-# INLINE genListM #-}
 
-nlNull :: NixList a -> Bool
-nlNull (NixList v) = V.null v
-{-# INLINE nlNull #-}
-
-nlUncons :: NixList a -> Maybe (a, NixList a)
-nlUncons (NixList v) = case V.uncons v of
-  Nothing -> Nothing
-  Just (x, xs) -> Just (x, NixList xs)
-{-# INLINE nlUncons #-}
-
-nlCons :: a -> NixList a -> NixList a
-nlCons x (NixList v) = NixList (V.cons x v)
-{-# INLINE nlCons #-}
-
-nlSnoc :: NixList a -> a -> NixList a
-nlSnoc (NixList v) x = NixList (V.snoc v x)
-{-# INLINE nlSnoc #-}
-
-nlAppend :: NixList a -> NixList a -> NixList a
-nlAppend (NixList v1) (NixList v2) = NixList (v1 V.++ v2)
-{-# INLINE nlAppend #-}
-
--- * Conversion
-
-nlFromList :: [a] -> NixList a
-nlFromList = NixList . V.fromList
-{-# INLINE nlFromList #-}
-
-nlToList :: NixList a -> [a]
-nlToList (NixList v) = V.toList v
-{-# INLINE nlToList #-}
-
--- * Higher-order operations
-
-nlMap :: (a -> b) -> NixList a -> NixList b
-nlMap f (NixList v) = NixList (V.map f v)
-{-# INLINE nlMap #-}
-
-nlMapM :: Monad m => (a -> m b) -> NixList a -> m (NixList b)
-nlMapM f (NixList v) = NixList <$> V.mapM f v
-{-# INLINE nlMapM #-}
-
-nlFilter :: (a -> Bool) -> NixList a -> NixList a
-nlFilter p (NixList v) = NixList (V.filter p v)
-{-# INLINE nlFilter #-}
-
-nlFilterM :: Monad m => (a -> m Bool) -> NixList a -> m (NixList a)
-nlFilterM p (NixList v) = NixList <$> V.filterM p v
-{-# INLINE nlFilterM #-}
-
-nlMapMaybe :: (a -> Maybe b) -> NixList a -> NixList b
-nlMapMaybe f (NixList v) = NixList (V.mapMaybe f v)
-{-# INLINE nlMapMaybe #-}
-
-nlTraverse :: Applicative m => (a -> m b) -> NixList a -> m (NixList b)
-nlTraverse f (NixList v) = NixList <$> traverse f v
-{-# INLINE nlTraverse #-}
-
-nlReverse :: NixList a -> NixList a
-nlReverse (NixList v) = NixList (V.reverse v)
-{-# INLINE nlReverse #-}
-
-nlEmpty :: NixList a
-nlEmpty = NixList V.empty
-{-# INLINE nlEmpty #-}
-
-nlFoldl' :: (b -> a -> b) -> b -> NixList a -> b
-nlFoldl' f z (NixList v) = V.foldl' f z v
-{-# INLINE nlFoldl' #-}
-
-nlFoldM' :: Monad m => (b -> a -> m b) -> b -> NixList a -> m b
-nlFoldM' f z (NixList v) = V.foldM' f z v
-{-# INLINE nlFoldM' #-}
-
-nlFoldr :: (a -> b -> b) -> b -> NixList a -> b
-nlFoldr f z (NixList v) = V.foldr f z v
-{-# INLINE nlFoldr #-}
-
-nlHead :: NixList a -> Maybe a
-nlHead (NixList v)
-  | V.null v  = Nothing
-  | otherwise = Just (V.head v)
-{-# INLINE nlHead #-}
-
-nlTail :: NixList a -> Maybe (NixList a)
-nlTail (NixList v)
-  | V.null v  = Nothing
-  | otherwise = Just (NixList (V.tail v))
-{-# INLINE nlTail #-}
-
-nlGenerate :: Int -> (Int -> a) -> NixList a
-nlGenerate n f = NixList (V.generate n f)
-{-# INLINE nlGenerate #-}
-
-nlGenerateM :: Monad m => Int -> (Int -> m a) -> m (NixList a)
-nlGenerateM n f = NixList <$> V.generateM n f
-{-# INLINE nlGenerateM #-}
-
-nlConcat :: [NixList a] -> NixList a
-nlConcat xs = NixList (V.concat (unNixList <$> xs))
-{-# INLINE nlConcat #-}
-
-nlSingleton :: a -> NixList a
-nlSingleton x = NixList (V.singleton x)
-{-# INLINE nlSingleton #-}
-
-nlUnsafeTail :: NixList a -> NixList a
-nlUnsafeTail (NixList v) = NixList (V.unsafeTail v)
-{-# INLINE nlUnsafeTail #-}
-
-nlFoldr' :: (a -> b -> b) -> b -> NixList a -> b
-nlFoldr' f z (NixList v) = V.foldr' f z v
-{-# INLINE nlFoldr' #-}
-
-nlPartition :: (a -> Bool) -> NixList a -> (NixList a, NixList a)
-nlPartition p (NixList v) = let (a, b) = V.partition p v in (NixList a, NixList b)
-{-# INLINE nlPartition #-}
-
-nlPartitionM :: Monad m => (a -> m Bool) -> NixList a -> m (NixList a, NixList a)
-nlPartitionM p (NixList v) = do
+-- | Partition a list by a monadic predicate.
+partitionM :: Monad m => (a -> m Bool) -> NixList a -> m (NixList a, NixList a)
+partitionM p (NixList v) = do
   results <- V.mapM (\x -> (,x) <$> p x) v
   let (trues, falses) = V.partition fst results
   pure (NixList (snd <$> trues), NixList (snd <$> falses))
-{-# INLINE nlPartitionM #-}
+{-# INLINE partitionM #-}
+
+-- * Core operations
+
+-- | The empty list.
+empty :: NixList a
+empty = NixList V.empty
+{-# INLINE empty #-}
+
+-- | Check if the list is empty.
+null :: NixList a -> Bool
+null (NixList v) = V.null v
+{-# INLINE null #-}
+
+-- | Get the length of the list.
+length :: NixList a -> Int
+length (NixList v) = V.length v
+{-# INLINE length #-}
+
+-- | Safe indexing by position.
+elemAt :: NixList a -> Int -> Maybe a
+elemAt (NixList v) i = v V.!? i
+{-# INLINE elemAt #-}
+
+-- | Unsafe indexing by position.
+unsafeElemAt :: NixList a -> Int -> a
+unsafeElemAt (NixList v) i = V.unsafeIndex v i
+{-# INLINE unsafeElemAt #-}
+
+-- | Get the first element.
+head :: NixList a -> Maybe a
+head (NixList v)
+  | V.null v  = Nothing
+  | otherwise = Just (V.head v)
+{-# INLINE head #-}
+
+-- | Get all elements except the first.
+tail :: NixList a -> Maybe (NixList a)
+tail (NixList v)
+  | V.null v  = Nothing
+  | otherwise = Just (NixList (V.tail v))
+{-# INLINE tail #-}
+
+-- | Unsafe tail - undefined behavior if list is empty.
+unsafeTail :: NixList a -> NixList a
+unsafeTail (NixList v) = NixList (V.unsafeTail v)
+{-# INLINE unsafeTail #-}
+
+-- | Create a singleton list.
+singleton :: a -> NixList a
+singleton x = NixList (V.singleton x)
+{-# INLINE singleton #-}
+
+-- | Decompose into head and tail. Returns Nothing if empty.
+uncons :: NixList a -> Maybe (a, NixList a)
+uncons (NixList v) = case V.uncons v of
+  Nothing -> Nothing
+  Just (x, xs) -> Just (x, NixList xs)
+{-# INLINE uncons #-}
+
+-- | Prepend an element.
+cons :: a -> NixList a -> NixList a
+cons x (NixList v) = NixList (V.cons x v)
+{-# INLINE cons #-}
+
+-- | Append an element.
+snoc :: NixList a -> a -> NixList a
+snoc (NixList v) x = NixList (V.snoc v x)
+{-# INLINE snoc #-}
+
+-- | Concatenate two lists.
+append :: NixList a -> NixList a -> NixList a
+append (NixList v1) (NixList v2) = NixList (v1 V.++ v2)
+{-# INLINE append #-}
+
+-- | Build a list from a Haskell list.
+fromList :: [a] -> NixList a
+fromList = NixList . V.fromList
+{-# INLINE fromList #-}
+
+-- | Convert to a Haskell list.
+toList :: NixList a -> [a]
+toList (NixList v) = V.toList v
+{-# INLINE toList #-}
+
+-- | Reverse the list.
+reverse :: NixList a -> NixList a
+reverse (NixList v) = NixList (V.reverse v)
+{-# INLINE reverse #-}

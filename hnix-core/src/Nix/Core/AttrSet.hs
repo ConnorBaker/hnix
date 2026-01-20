@@ -13,7 +13,7 @@ module Nix.Core.AttrSet
   , lookup
   , member
     -- * Bulk operations
-  , union
+  , unionRight
   , unionWith
   , insertWith
   , intersection

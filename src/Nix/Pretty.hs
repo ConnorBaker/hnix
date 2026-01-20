@@ -414,7 +414,7 @@ valueToExpr = iterNValueByDiscardWith thk (Fix . phi)
   phi :: NValue' t f m NExpr -> NExprF NExpr
   phi (NVConstant' a     ) = NConstant a
   phi (NVStr'      ns    ) = NStr $ DoubleQuoted $ one $ Plain $ ignoreContext ns
-  phi (NVList'     l     ) = NList (L.nlToList l)
+  phi (NVList'     l     ) = NList (L.toList l)
   phi (NVSet'      p    s) = NSet mempty
     [ NamedVar (one $ StaticKey k) v (fromMaybe nullPos $ (`A.lookup` p) k)
     | (k, v) <- sortWith fst $ A.toList s  -- Sort alphabetically like Nix
@@ -544,7 +544,7 @@ printNix =
     in  if s == thunkStubText
           then s  -- Don't quote the cycle/thunk stub
           else "\"" <> escapeString s <> "\""
-  phi (NVList'     l ) = case L.nlToList l of
+  phi (NVList'     l ) = case L.toList l of
     [] -> "[ ]"
     xs -> "[ " <> unwords xs <> " ]"
   phi (NVSet' _ s) =

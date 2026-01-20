@@ -95,7 +95,7 @@ instance Eq1 (NValueF p m) where
   liftEq _  (NVStrF      x) (NVStrF      y) = x == y
   liftEq _  (NVPathF     x) (NVPathF     y) = x == y
   liftEq eq (NVListF     x) (NVListF     y) =
-    L.nlLength x == L.nlLength y && and (zipWith eq (L.nlToList x) (L.nlToList y))
+    L.length x == L.length y && and (zipWith eq (L.toList x) (L.toList y))
   liftEq eq (NVSetF      x) (NVSetF      y) =
     A.size x == A.size y && and (zipWith pairEq (A.toList x) (A.toList y))
     where pairEq (k1, v1) (k2, v2) = k1 == k2 && eq v1 v2
@@ -109,7 +109,7 @@ instance Show r => Show (NValueF p m r) where
     \case
       (NVConstantF atom     ) -> showsCon1 "NVConstant" atom
       (NVStrF      s        ) -> showsCon1 "NVStr"      s
-      (NVListF     lst      ) -> showsCon1 "NVList"     (L.nlToList lst)
+      (NVListF     lst      ) -> showsCon1 "NVList"     (L.toList lst)
       (NVSetF      attrs    ) -> showsCon1 "NVSet"      attrs
       (NVClosureF  _        ) -> showString "NVClosure"
       (NVPathF     p        ) -> showsCon1 "NVPath"     p
@@ -146,7 +146,7 @@ sequenceNValueF transform = \case
   NVConstantF a  -> pure $ NVConstantF a
   NVStrF      s  -> pure $ NVStrF s
   NVPathF     p  -> pure $ NVPathF p
-  NVListF     l  -> NVListF <$> L.nlTraverse id l
+  NVListF     l  -> NVListF <$> traverse id l
   NVSetF      s  -> NVSetF <$> A.traverseWithKey (\_ v -> v) s
   NVClosureF  g  -> pure $ NVClosureF (transform <=< g)
   NVBuiltinF s g -> pure $ NVBuiltinF s (transform <=< g)
@@ -165,7 +165,7 @@ bindNValueF transform f = \case
   NVConstantF a  -> pure $ NVConstantF a
   NVStrF      s  -> pure $ NVStrF s
   NVPathF     p  -> pure $ NVPathF p
-  NVListF     l  -> NVListF <$> L.nlTraverse f l
+  NVListF     l  -> NVListF <$> traverse f l
   NVSetF      s  -> NVSetF <$> A.traverseWithKey (\_ v -> f v) s
   NVClosureF  g  -> pure $ NVClosureF (transform . f <=< g)
   NVBuiltinF s g -> pure $ NVBuiltinF s (transform . f <=< g)

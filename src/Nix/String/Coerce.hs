@@ -99,7 +99,7 @@ coerceAnyToNixString call ctsm = go
           NVConstant NNull ->
             pure nixStringEmpty
           NVList l ->
-            nixStringUnwords . L.nlToList <$> L.nlMapM go l
+            nixStringUnwords . L.toList <$> traverse go l
           v@(NVSet _ s) ->
             case continueOnKey (`call` v) "__toString"
                  <|> continueOnKey pure "outPath" of

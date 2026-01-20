@@ -96,7 +96,7 @@ appendContextNix tx ty =
                             Just touts -> do
                               outs <- demand touts
                               case outs of
-                                NVList vs -> L.nlToList <$> L.nlMapM (fmap ignoreContext . fromValue) vs
+                                NVList vs -> L.toList <$> traverse (fmap ignoreContext . fromValue) vs
                                 _x -> throwError $ ErrorCall $ "Invalid types for context value outputs in builtins.appendContext: " <> show _x
 
                       path <- getK "path"

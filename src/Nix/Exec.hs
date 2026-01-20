@@ -157,7 +157,7 @@ mkNVListWithProvenance
   -> [NValue t f m]
   -> NValue t f m
 mkNVListWithProvenance scope span elems =
-  addProvenance (Provenance scope $ NListAnnF span (pure <$> elems)) $ NVList (L.nlFromList elems)
+  addProvenance (Provenance scope $ NListAnnF span (pure <$> elems)) $ NVList (L.fromList elems)
 
 mkNVSetWithProvenance
   :: MonadCited t f m
@@ -423,7 +423,7 @@ instance (MonadNix e t f m, HasProvCfg (CtxCfg e)) => MonadEval (NValue t f m) m
         (pure internedEmptyList)
       _ -> withProvCtx
         (\scope span -> pure $ mkNVListWithProvenance scope span elems)
-        (pure $ NVList $ L.nlFromList elems)
+        (pure $ NVList $ L.fromList elems)
 
   -- | Evaluate a set literal. Returns interned empty set for {} when
   -- provenance is disabled.
@@ -592,11 +592,11 @@ execBinaryOpForced' op lval rval =
       case (lval, rval) of
         (NVList ls, NVList rs)
           -- Fast paths: avoid allocation when one or both lists are empty
-          | L.nlNull ls && L.nlNull rs -> withProvCtx
-              (\scope span -> pure $ mkNVBinaryOpWithProvenance scope span op (pure lval) (pure rval) $ NVList L.nlEmpty)
+          | L.null ls && L.null rs -> withProvCtx
+              (\scope span -> pure $ mkNVBinaryOpWithProvenance scope span op (pure lval) (pure rval) $ NVList L.empty)
               (pure internedEmptyList)
-          | L.nlNull ls -> wrapResult rval
-          | L.nlNull rs -> wrapResult lval
+          | L.null ls -> wrapResult rval
+          | L.null rs -> wrapResult lval
           | otherwise -> wrapResult $ NVList $ ls <> rs
         _ -> unsupportedTypes
 

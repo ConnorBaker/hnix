@@ -4,15 +4,15 @@
   inputs = {
     nixpkgs.follows = "haskellNix/nixpkgs-unstable";
     nix.url = "github:NixOS/nix";
-    haskellNix.url = "github:input-output-hk/haskell.nix/pull/2434/merge";
+    haskellNix.url = "github:input-output-hk/haskell.nix/pull/2467/merge";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
   # Binary Cache for haskell.nix
-  nixConfig = {
-    extra-trusted-public-keys = [ "hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=" ];
-    extra-substituters = [ "https://cache.iog.io" ];
-  };
+  # nixConfig = {
+  #   extra-trusted-public-keys = [ "hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=" ];
+  #   extra-substituters = [ "https://cache.iog.io" ];
+  # };
 
   outputs = { self, nixpkgs, nix, flake-utils, haskellNix }:
     flake-utils.lib.eachDefaultSystem (system:
@@ -47,8 +47,8 @@
                 shell = {
                   tools = {
                     cabal = {};
-                    hlint = {};
-                    haskell-language-server = {};
+                    # hlint = {};
+                    # haskell-language-server = {};
                   };
                   buildInputs = with pkgs; [
                     pkg-config

@@ -341,7 +341,7 @@ splitMatches numDropped (((_, (start, len)) : captures) : mts) haystack =
   relStart       = max 0 start - numDropped
   (before, rest) = B.splitAt relStart haystack
   caps :: NValue t f m
-  caps           = NVList (L.nlFromList $ f <$> captures)
+  caps           = NVList (L.fromList $ f <$> captures)
   f :: (ByteString, (Int, b)) -> NValue t f m
   f (a, (s, _))  =
     if s >= 0

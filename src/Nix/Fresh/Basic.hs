@@ -43,7 +43,7 @@ instance (MonadEffects t f m, MonadDataContext f m)
   findPath vs path =
     do
       i <- FreshIdT ask
-      lift $ findPath @t @f @m (L.nlMap (unliftNValue (`runFreshIdT` i)) vs) path
+      lift $ findPath @t @f @m (fmap (unliftNValue (`runFreshIdT` i)) vs) path
 
   importPath :: Path -> StdIdT m (NValue t f (StdIdT m))
   importPath path =
