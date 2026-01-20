@@ -21,7 +21,6 @@ where
 
 import           Nix.Prelude
 import           GHC.Exception                  ( ErrorCall(ErrorCall) )
-import           Control.Monad.Catch            ( MonadCatch(catch) )
 import qualified Crypto.Hash                   as Hash
 import qualified Data.Aeson                    as A
 #if MIN_VERSION_aeson(2,0,0)
@@ -32,7 +31,6 @@ import           Data.ByteArray.Encoding        ( Base(Base16, Base64)
                                                 , convertFromBase
                                                 , convertToBase
                                                 )
-import           Data.Bits
 import qualified Data.ByteString               as B
 import           Data.ByteString.Base16        as Base16
 import           Data.Fix                       ( foldFix )
@@ -49,7 +47,9 @@ import           Text.Printf                    ( printf )
 import           Data.Fixed                     ( Pico )
 import           NeatInterpolation              ( text )
 import           Nix.Atoms
+import           Nix.Builtins.Arithmetic
 import           Nix.Builtins.AttrSet
+import           Nix.Builtins.Control
 import           Nix.Builtins.Internal
 import           Nix.Builtins.List
 import           Nix.Builtins.String
@@ -76,7 +76,6 @@ import qualified Nix.Eval                      as Eval
 import           Nix.Frames
 import           Nix.Json
 import           Nix.Normal
-import           Nix.Pretty                     ( printNix )
 import           Nix.Options
 import           Nix.Parser
 import           Nix.Render
@@ -235,65 +234,6 @@ unsafeGetAttrPosNix nvX nvY =
           Just v -> toValue v
       _xy -> throwError $ ErrorCall $ "Invalid types for builtins.unsafeGetAttrPosNix: " <> show _xy
 
-addNix
-  :: MonadNix e t f m
-  => NValue t f m
-  -> NValue t f m
-  -> m (NValue t f m)
-addNix nvX nvY =
-  do
-    x' <- demand nvX
-    y' <- demand nvY
-
-    case (x', y') of
-      (NVConstant (NInt   x), NVConstant (NInt   y)) ->
-        case checkedAdd x y of
-          Left err -> throwError $ ErrorCall err
-          Right r  -> toValue r
-      (NVConstant (NFloat x), NVConstant (NInt   y)) -> toValue $             x + fromIntegral y
-      (NVConstant (NInt   x), NVConstant (NFloat y)) -> toValue $ fromIntegral x + y
-      (NVConstant (NFloat x), NVConstant (NFloat y)) -> toValue $             x + y
-      (_x                   , _y                   ) -> throwError $ Addition _x _y
-
-mulNix
-  :: MonadNix e t f m
-  => NValue t f m
-  -> NValue t f m
-  -> m (NValue t f m)
-mulNix nvX nvY =
-  do
-    x' <- demand nvX
-    y' <- demand nvY
-
-    case (x', y') of
-      (NVConstant (NInt   x), NVConstant (NInt   y)) ->
-        case checkedMul x y of
-          Left err -> throwError $ ErrorCall err
-          Right r  -> toValue r
-      (NVConstant (NFloat x), NVConstant (NInt   y)) -> toValue (x * fromIntegral y)
-      (NVConstant (NInt   x), NVConstant (NFloat y)) -> toValue (fromIntegral x * y)
-      (NVConstant (NFloat x), NVConstant (NFloat y)) -> toValue (x * y            )
-      (_x                   , _y                   ) -> throwError $ Multiplication _x _y
-
-divNix
-  :: MonadNix e t f m
-  => NValue t f m
-  -> NValue t f m
-  -> m (NValue t f m)
-divNix nvX nvY =
-  do
-    x' <- demand nvX
-    y' <- demand nvY
-    case (x', y') of
-      (NVConstant (NInt   x), NVConstant (NInt   y)) | y /= 0 ->
-        case checkedDiv x y of
-          Left err -> throwError $ ErrorCall err
-          Right r  -> toValue r
-      (NVConstant (NFloat x), NVConstant (NInt   y)) | y /= 0 -> toValue $                     x / fromIntegral y
-      (NVConstant (NInt   x), NVConstant (NFloat y)) | y /= 0 -> toValue $         fromIntegral x / y
-      (NVConstant (NFloat x), NVConstant (NFloat y)) | y /= 0 -> toValue $                     x / y
-      (_x                   , _y                   )         -> throwError $ Division _x _y
-
 baseNameOfNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 baseNameOfNix x =
   do
@@ -310,45 +250,6 @@ baseNameOfNix x =
     nixBaseNameOf s = case reverse s of
       '/':c:rest | c /= '/' -> FP.takeFileName (reverse (c:rest))
       _ -> FP.takeFileName s
-
-bitAndNix
-  :: forall e t f m
-   . MonadNix e t f m
-  => NValue t f m
-  -> NValue t f m
-  -> m (NValue t f m)
-bitAndNix x y =
-  do
-    a <- fromValue @Integer x
-    b <- fromValue @Integer y
-
-    toValue $ a .&. b
-
-bitOrNix
-  :: forall e t f m
-   . MonadNix e t f m
-  => NValue t f m
-  -> NValue t f m
-  -> m (NValue t f m)
-bitOrNix x y =
-  do
-    a <- fromValue @Integer x
-    b <- fromValue @Integer y
-
-    toValue $ a .|. b
-
-bitXorNix
-  :: forall e t f m
-   . MonadNix e t f m
-  => NValue t f m
-  -> NValue t f m
-  -> m (NValue t f m)
-bitXorNix x y =
-  do
-    a <- fromValue @Integer x
-    b <- fromValue @Integer y
-
-    toValue $ a `xor` b
 
 builtinsBuiltinNix
   :: forall e t f m
@@ -511,22 +412,6 @@ unsafeDiscardStringContextNix
 unsafeDiscardStringContextNix =
   inHask (mkNixStringWithoutContext . ignoreContext)
 
--- | Evaluate `a` to WHNF to collect its topmost effect.
-seqNix
-  :: MonadNix e t f m
-  => NValue t f m
-  -> NValue t f m
-  -> m (NValue t f m)
-seqNix a b = b <$ demand a
-
--- | Evaluate 'a' to NF to collect all of its effects, therefore data cycles are ignored.
-deepSeqNix
-  :: MonadNix e t f m
-  => NValue t f m
-  -> NValue t f m
-  -> m (NValue t f m)
-deepSeqNix a b = b <$ normalForm_ a
-
 toFileNix
   :: MonadNix e t f m
   => NValue t f m
@@ -587,11 +472,6 @@ pathExistsNix nvpath =
         then storePathExists path
         else doesPathExist path
     askInternedBool exists
-
-throwNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
-throwNix =
-  throwError . ErrorCall . toString . ignoreContext
-    <=< coerceStringlikeToNixString CopyToStore
 
 -- | Implementation of Nix @import@ clause.
 --
@@ -678,31 +558,6 @@ scopedImportNix asetArg pathArg =
 getEnvNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 getEnvNix v =
   (toValue . mkNixStringWithoutContext . maybeToMonoid) =<< getEnvVar =<< fromStringNoContext =<< fromValue v
-
-lessThanNix
-  :: MonadNix e t f m
-  => NValue t f m
-  -> NValue t f m
-  -> m (NValue t f m)
-lessThanNix ta tb =
-  do
-    va <- demand ta
-    vb <- demand tb
-
-    let
-      badType = throwError $ ErrorCall $ "builtins.lessThan: expected two numbers or two strings, got '" <> show va <> "' and '" <> show vb <> "'."
-
-    NVBool <$>
-      case (va, vb) of
-        (NVConstant ca, NVConstant cb) ->
-          case (ca, cb) of
-            (NInt   a, NInt   b) -> pure $             a < b
-            (NInt   a, NFloat b) -> pure $ fromIntegral a < b
-            (NFloat a, NInt   b) -> pure $             a < fromIntegral b
-            (NFloat a, NFloat b) -> pure $             a < b
-            _                    -> badType
-        (NVStr a, NVStr b) -> pure $ ignoreContext a < ignoreContext b
-        _ -> badType
 
 -- | hashFileNix
 -- use hashStringNix to hash file content
@@ -1199,86 +1054,6 @@ toJSONNix = (fmap NVStr . toJSONNixString) <=< demand
 
 toXMLNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 toXMLNix = (fmap (NVStr . toXML) . normalForm) <=< demand
-
-tryEvalNix
-  :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-tryEvalNix e = (`catch` (pure . onError))
-  (onSuccess <$> demand e)
- where
-  onSuccess v =
-    NVSet
-      mempty
-      $ A.fromList
-        [ (mkVarName "success", NVBool True)
-        , (mkVarName "value"  , v            )
-        ]
-
-  onError :: SomeException -> NValue t f m
-  onError _ =
-    NVSet
-      mempty
-      $ A.fromList
-        $ (\n -> (mkVarName n, NVBool False)) <$>
-          [ "success"
-          , "value"
-          ]
-
-traceNix
-  :: forall e t f m
-   . MonadNix e t f m
-  => NValue t f m
-  -> NValue t f m
-  -> m (NValue t f m)
-traceNix msg action =
-  do
-    -- Normalize the value to handle thunks and cycles, then pretty-print
-    normalized <- normalizeValue msg
-    traceEffect @t @f @m $ toString $ printNix normalized
-    pure action
-
-breakNix
-  :: forall e t f m
-   . MonadNix e t f m
-  => NValue t f m
-  -> m (NValue t f m)
-breakNix = pure
-
-warnNix
-  :: forall e t f m
-   . MonadNix e t f m
-  => NValue t f m
-  -> NValue t f m
-  -> m (NValue t f m)
-warnNix msg action =
-  do
-    msgNs <- fromValue =<< demand msg
-    traceEffect @t @f @m $ "evaluation warning: " <> toString (ignoreContext msgNs)
-    demand action
-
-traceVerboseNix
-  :: forall e t f m
-   . MonadNix e t f m
-  => NValue t f m
-  -> NValue t f m
-  -> m (NValue t f m)
-traceVerboseNix msg action =
-  do
-    opts <- askOptions
-    if isTrace opts
-      then do
-        traceEffect @t @f @m . toString . ignoreContext =<< fromValue msg
-        demand action
-      else
-        demand action
-
--- Please, can function remember fail context
-addErrorContextNix
-  :: forall e t f m
-   . MonadNix e t f m
-  => NValue t f m
-  -> NValue t f m  -- action
-  -> m (NValue t f m)
-addErrorContextNix _ = pure
 
 execNix
   :: forall e t f m . (MonadNix e t f m, HasProvCfg (CtxCfg e)) => NValue t f m -> m (NValue t f m)
