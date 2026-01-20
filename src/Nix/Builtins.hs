@@ -33,7 +33,6 @@ import           Data.ByteArray.Encoding        ( Base(Base16, Base64)
                                                 , convertFromBase
                                                 , convertToBase
                                                 )
-import           Data.Array
 import           Data.Bits
 import qualified Data.ByteString               as B
 import           Data.ByteString.Base16        as Base16
@@ -47,7 +46,6 @@ import           Data.Sequence                  ( ViewL(..), (><) )
 import qualified Data.Map.Strict               as M
 import qualified Data.Set                      as S
 import qualified Data.Text                     as Text
-import qualified Data.Text.Lazy.Builder        as Builder
 import qualified Data.Time.Clock.POSIX         as Time
 import qualified Data.Time.Calendar            as Time
 import qualified Data.Time.LocalTime           as Time
@@ -57,6 +55,7 @@ import           Data.Fixed                     ( Pico )
 import           NeatInterpolation              ( text )
 import           Nix.Atoms
 import           Nix.Builtins.Internal
+import           Nix.Builtins.String
 import           Nix.Builtins.Type
 import           Nix.Convert
 import           Nix.Core.List                  ( NixList )
@@ -99,14 +98,6 @@ import qualified System.Nix.StorePath          as Store
 import           System.Nix.Base32             as Base32
 import           System.Nix.FileContentAddress  ( FileIngestionMethod(..) )
 import           System.Nix.ContentAddress      ( ContentAddressMethod(..) )
-import           Text.Regex.TDFA                ( Regex
-                                                , makeRegexOpts
-                                                , matchOnceText
-                                                , matchAllText
-                                                , defaultCompOpt
-                                                , defaultExecOpt
-                                                , CompOption(..)
-                                                )
 import qualified Toml
 
 -- This is a big module. There is recursive reuse:
@@ -169,9 +160,6 @@ nixPathNix =
                 )
               )
             <> rest
-
-toStringNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
-toStringNix = toValue <=< coerceAnyToNixString callFunc DontCopyToStore
 
 -- | Check if an attribute exists in a set.
 -- Returns interned false immediately for empty set (fast path).
@@ -423,137 +411,6 @@ tailNix nv = do
     Just t
       | L.nlNull t  -> askInternedEmptyList
       | otherwise -> pure $ NVList t
-
-splitVersionNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
-splitVersionNix v =
-  do
-    version <- fromStringNoContext =<< fromValue v
-    pure $
-      NVList $
-        L.nlFromList $
-          mkNVStrWithoutContext . show <$>
-            splitVersion version
-
-compareVersionsNix
-  :: MonadNix e t f m
-  => NValue t f m
-  -> NValue t f m
-  -> m (NValue t f m)
-compareVersionsNix t1 t2 =
-  do
-    s1 <- mkText t1
-    s2 <- mkText t2
-
-    let
-      cmpVers =
-        case compareVersions s1 s2 of
-          LT -> -1
-          EQ -> 0
-          GT -> 1
-
-    pure $ NVConstant $ NInt cmpVers
-
- where
-  mkText = fromStringNoContext <=< fromValue
-
-parseDrvNameNix
-  :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-parseDrvNameNix drvname =
-  do
-    s <- fromStringNoContext =<< fromValue drvname
-
-    let
-      (name :: Text, version :: Text) = splitDrvName s
-
-    toValue @(AttrSet (NValue t f m)) $
-      A.fromList
-        [ ( mkVarName "name"
-          , mkNVStr name
-          )
-        , ( mkVarName "version"
-          , mkNVStr version
-          )
-        ]
-
- where
-  mkNVStr = mkNVStrWithoutContext
-
-matchNix
-  :: forall e t f m
-   . MonadNix e t f m
-  => NValue t f m
-  -> NValue t f m
-  -> m (NValue t f m)
-matchNix pat str =
-  do
-    p <- fromStringNoContext =<< fromValue pat
-    ns <- fromValue str
-
-    -- NOTE: 2018-11-19: Currently prim_match in nix/src/libexpr/primops.cc
-    -- ignores the context of its second argument. This is probably a bug but we're
-    -- going to preserve the behavior here until it is fixed upstream.
-    -- Relevant issue: https://github.com/NixOS/nix/issues/2547
-    let
-      s  = ignoreContext ns
-      -- Use POSIX ERE semantics: . matches newlines, ^/$ match string boundaries only
-      nixCompOpt = defaultCompOpt { multiline = False }
-      re = makeRegexOpts nixCompOpt defaultExecOpt p :: Regex
-      -- mkMatch: convert a capture group to NValue
-      -- offset -1 means the group didn't participate in the match (null)
-      -- offset >= 0 means the group participated, even if empty (returns the text)
-      mkMatch (t, (offset, _len)) =
-        if offset < 0
-          then pure NVNull
-          else toValue $ mkNixStringWithoutContext t
-
-    case matchOnceText re s of
-      Just ("", sarr, "") ->
-        do
-          let submatches = elems sarr
-          (NVList . L.nlFromList) <$>
-            traverse
-              mkMatch
-              (case submatches of
-                 [] -> mempty
-                 [_] -> mempty  -- single element means no capture groups, return empty list
-                 _:xs -> xs -- return only the matched groups, drop the full string
-              )
-      _ -> pure NVNull
-
-splitNix
-  :: forall e t f m
-   . MonadNix e t f m
-  => NValue t f m
-  -> NValue t f m
-  -> m (NValue t f m)
-splitNix pat str =
-  do
-    p <- fromStringNoContext =<< fromValue pat
-    ns <- fromValue str
-        -- NOTE: Currently prim_split in nix/src/libexpr/primops.cc ignores the
-        -- context of its second argument. This is probably a bug but we're
-        -- going to preserve the behavior here until it is fixed upstream.
-        -- Relevant issue: https://github.com/NixOS/nix/issues/2547
-    let
-      s = ignoreContext ns
-      -- Use POSIX ERE semantics: . matches newlines, ^/$ match string boundaries only
-      nixCompOpt = defaultCompOpt { multiline = False }
-      regex = makeRegexOpts nixCompOpt defaultExecOpt p :: Regex
-      haystack = encodeUtf8 s
-
-    pure $ NVList $ L.nlFromList $ splitMatches 0 (elems <$> matchAllText regex haystack) haystack
-
-substringNix :: forall e t f m. MonadNix e t f m => Int -> Int -> NixString -> Prim m NixString
-substringNix start len str =
-  Prim $
-    if start >= 0
-      then pure $ modifyNixContents (take . Text.drop start) str
-      else throwError $ ErrorCall $ "builtins.substring: negative start position: " <> show start
- where
-  take =
-    if len >= 0
-      then Text.take len
-      else id  --NOTE: negative values of 'len' are OK, and mean "take everything"
 
 -- | Get attribute names from a set as a list of strings.
 -- Fast path: returns interned empty list for empty set.
@@ -1057,94 +914,6 @@ genericClosureNix c =
         -- Convert result Seq to Vector
         (NVList . L.nlFromList . toList) . snd <$> go mempty (Seq.fromList (L.nlToList ssVec))
 
--- | Takes:
--- 1. List of strings to match.
--- 2. List of strings to replace corresponding match occurance. (arg 1 & 2 lists matched by index)
--- 3. String to process
--- -> returns the string with requested replacements.
---
--- Example:
--- builtins.replaceStrings ["ll" "e"] [" " "i"] "Hello world" == "Hi o world".
-replaceStringsNix
-  :: MonadNix e t f m
-  => NValue t f m
-  -> NValue t f m
-  -> NValue t f m
-  -> m (NValue t f m)
-replaceStringsNix tfrom tto ts =
-  do
-    -- NixStrings have context - remember
-    (fromKeys :: [NixString]) <- fromValue (Deeper tfrom)
-    (toVals   :: [NixString]) <- fromValue (Deeper tto)
-    (string   ::  NixString ) <- fromValue ts
-
-    when (length fromKeys /= length toVals) $ throwError $ ErrorCall "builtins.replaceStrings: Arguments `from`&`to` construct a key-value map, so the number of their elements must always match."
-
-    let
-      --  2021-02-18: NOTE: if there is no match - the process does not changes the context, simply slides along the string.
-      --  So it isbe more effective to pass the context as the first argument.
-      --  And moreover, the `passOneCharNgo` passively passes the context, to context can be removed from it and inherited directly.
-      --  Then the solution would've been elegant, but the Nix bug prevents elegant implementation.
-      go ctx input output =
-        case maybePrefixMatch of
-          -- Passively pass the chars
-          Nothing -> passOneChar
-          Just match -> replace match
-        where
-          -- When prefix matched something - returns (match, replacement, remainder)
-          maybePrefixMatch :: Maybe (Text, NixString, Text)
-          maybePrefixMatch =
-            formMatchReplaceTailInfo <$> find ((`Text.isPrefixOf` input) . fst) fromKeysToValsMap
-            where
-              formMatchReplaceTailInfo (m, r) =
-                (m, r, Text.drop (Text.length m) input)
-
-              fromKeysToValsMap = zip (ignoreContext <$> fromKeys) toVals
-
-          -- Not passing args => It is constant that gets embedded into `go` => It is simple `go` tail recursion
-          passOneChar =
-            case Text.uncons input of
-              Nothing -> finish ctx output  -- The base case - there is no chars left to process -> finish
-              Just (c, i) -> go ctx i (output <> Builder.singleton c) -- If there are chars - pass one char & continue
-
-          --  2021-02-18: NOTE: rly?: toStrict . toLazyText
-          --  Maybe `text-builder`, `text-show`?
-          finish ctx output = mkNixString ctx (toStrict $ Builder.toLazyText output)
-
-          replace (key, replacementNS, unprocessedInput) =
-            replaceWithNixBug unprocessedInput updatedOutput
-            where
-              replaceWithNixBug =
-                if isNixBugCase
-                  -- Allowing match on "" is a inherited bug of Nix,
-                  -- when "" is checked - it always matches. And so - when it checks - it always insers a replacement, and then process simply passesthrough the char that was under match.
-                  --
-                  -- repl> builtins.replaceStrings ["" "e"] [" " "i"] "Hello world"
-                  -- " H e l l o   w o r l d "
-                  -- repl> builtins.replaceStrings ["ll" ""] [" " "i"] "Hello world"
-                  -- "iHie ioi iwioirilidi"
-                  --  2021-02-18: NOTE: There is no tests for this
-                  then bugPassOneChar  -- augmented recursion
-                  else go updatedCtx  -- tail recursion
-
-              isNixBugCase = key == mempty
-
-              updatedOutput  = output <> replacement
-              updatedCtx     = ctx <> replacementCtx
-
-              replacement    = Builder.fromText $ ignoreContext replacementNS
-              replacementCtx = getStringContext replacementNS
-
-              -- The bug modifies the content => bug demands `pass` to be a real function =>
-              -- `go` calls `pass` function && `pass` calls `go` function
-              -- => mutual recusion case, so placed separately.
-              bugPassOneChar input output =
-                case Text.uncons input of
-                  Nothing -> finish updatedCtx output  -- The base case - there is no chars left to process -> finish
-                  Just (c, i) -> go updatedCtx i $ output <> Builder.singleton c -- If there are chars - pass one char & continue
-
-    toValue $ go (getStringContext string) (ignoreContext string) mempty
-
 -- | Remove attributes from a set.
 -- Fast path: returns interned empty set if result is empty.
 removeAttrsNix
@@ -1455,34 +1224,6 @@ listToAttrsNix lst =
         -- A.fromList keeps the last occurrence, but we want the first.
         -- Using L.nlFoldr' processes right-to-left, so first occurrence is inserted last and wins.
         pure $ NVSet emptyPositionSet $ L.nlFoldr' (uncurry A.insert) mempty pairs
-
--- prim_hashString from nix/src/libexpr/primops.cc
--- fail if context in the algo arg
--- propagate context from the s arg
--- | The result coming out of hashString is base16 encoded
-hashStringNix
-  :: forall e t f m. MonadNix e t f m => NixString -> NixString -> Prim m NixString
-hashStringNix nsAlgo ns =
-  Prim $
-    do
-      algo <- fromStringNoContext nsAlgo
-      let
-        f g = pure $ modifyNixContents g ns
-
-      case algo of
-        --  2021-03-04: Pattern can not be taken-out because hashes represented as different types
-        "md5"    -> f (show . mkHash @Hash.MD5)
-        "sha1"   -> f (show . mkHash @Hash.SHA1)
-        "sha256" -> f (show . mkHash @Hash.SHA256)
-        "sha512" -> f (show . mkHash @Hash.SHA512)
-
-        _ -> throwError $ ErrorCall $ "builtins.hashString: expected \"md5\", \"sha1\", \"sha256\", or \"sha512\", got " <> show algo
-
-       where
-        -- This intermidiary `a` is only needed because of the type application
-        mkHash :: (Show a, Hash.HashAlgorithm a) => Text -> Hash.Digest a
-        mkHash s = Hash.hash (encodeUtf8 s :: ByteString)
-
 
 -- | hashFileNix
 -- use hashStringNix to hash file content
