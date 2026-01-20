@@ -401,6 +401,10 @@ library
     hnix-core
       requires
         (Nix.AttrSet.Sig as Nix.AttrSet.HashMap,
+         Nix.List.Sig as Nix.List.Vector),
+    hnix-value-core
+      requires
+        (Nix.AttrSet.Sig as Nix.AttrSet.HashMap,
          Nix.List.Sig as Nix.List.Vector)
   exposed-modules:
     Nix
@@ -481,6 +485,7 @@ library
     -- Backpack packages for abstract data structures
     , hnix-types
     , hnix-core
+    , hnix-value-core
     , hnix-attrset-hashmap
     , hnix-list-vector
     , base16-bytestring >= 0.1.1

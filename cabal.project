@@ -19,6 +19,7 @@ packages:
   ./implementations/hnix-attrset-hashmap
   ./implementations/hnix-list-vector
   ./hnix-core
+  ./hnix-value-core
   ./hnix-instantiated
   -- hnix-store packages
   ./hnix-store/hnix-store-core
