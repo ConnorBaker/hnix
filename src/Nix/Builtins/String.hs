@@ -1,4 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -7,8 +8,8 @@
 -- | String manipulation builtins.
 --
 -- This module contains builtins that operate on strings:
--- hashString, match, split, substring, replaceStrings,
--- compareVersions, splitVersion, parseDrvName, and toString.
+-- hashString, hashFile, convertHash, match, split, substring, replaceStrings,
+-- compareVersions, splitVersion, parseDrvName, placeholder, and toString.
 module Nix.Builtins.String
   ( -- * String manipulation
     hashStringNix
@@ -22,11 +23,21 @@ module Nix.Builtins.String
   , parseDrvNameNix
     -- * Coercion
   , toStringNix
+    -- * Hash conversion
+  , hashFileNix
+  , convertHashNix
+  , placeHolderNix
   ) where
 
 import           Nix.Prelude
 import           GHC.Exception                  ( ErrorCall(ErrorCall) )
 import qualified Crypto.Hash                   as Hash
+import           Data.ByteArray.Encoding        ( Base(Base16, Base64)
+                                                , convertFromBase
+                                                , convertToBase
+                                                )
+import qualified Data.ByteString               as B
+import           Data.ByteString.Base16        as Base16
 import qualified Data.Text                     as Text
 import qualified Data.Text.Lazy.Builder        as Builder
 import           Data.Array                     ( elems )
@@ -47,13 +58,17 @@ import           Nix.Builtins.Internal          ( Prim(..)
                                                 , compareVersions
                                                 , splitDrvName
                                                 , splitMatches
+                                                , attrsetGet
                                                 )
 import           Nix.Convert
 import           Nix.Exec
 import           Nix.Frames
+import           Nix.Render                     ( readFile )
 import           Nix.String
 import           Nix.String.Coerce
 import           Nix.Value
+import           Nix.Value.Monad
+import           System.Nix.Base32             as Base32
 
 
 -- * Coercion
@@ -327,3 +342,241 @@ hashStringNix nsAlgo ns =
         -- This intermidiary `a` is only needed because of the type application
         mkHash :: (Show a, Hash.HashAlgorithm a) => Text -> Hash.Digest a
         mkHash s = Hash.hash (encodeUtf8 s :: ByteString)
+
+-- | hashFileNix
+-- use hashStringNix to hash file content
+hashFileNix
+  :: forall e t f m . MonadNix e t f m => NixString -> Path -> Prim m NixString
+hashFileNix nsAlgo nvfilepath = Prim $ hash =<< fileContent
+ where
+  hash = outPrim . hashStringNix nsAlgo
+  outPrim (Prim x) = x
+  fileContent :: m NixString
+  fileContent = mkNixStringWithoutContext <$> Nix.Render.readFile nvfilepath
+
+
+-- * Hash conversion
+
+data HashAlgoName
+  = HashAlgoMD5
+  | HashAlgoSHA1
+  | HashAlgoSHA256
+  | HashAlgoSHA512
+  deriving (Eq, Show)
+
+data HashFormatName
+  = HashFormatBase16
+  | HashFormatNix32
+  | HashFormatBase64
+  | HashFormatSRI
+  deriving (Eq, Show)
+
+hashAlgoFromText :: Text -> Maybe HashAlgoName
+hashAlgoFromText =
+  \case
+    "md5"    -> Just HashAlgoMD5
+    "sha1"   -> Just HashAlgoSHA1
+    "sha256" -> Just HashAlgoSHA256
+    "sha512" -> Just HashAlgoSHA512
+    _        -> Nothing
+
+hashAlgoToText :: HashAlgoName -> Text
+hashAlgoToText =
+  \case
+    HashAlgoMD5    -> "md5"
+    HashAlgoSHA1   -> "sha1"
+    HashAlgoSHA256 -> "sha256"
+    HashAlgoSHA512 -> "sha512"
+
+hashAlgoDigestLength :: HashAlgoName -> Int
+hashAlgoDigestLength =
+  \case
+    HashAlgoMD5    -> 16
+    HashAlgoSHA1   -> 20
+    HashAlgoSHA256 -> 32
+    HashAlgoSHA512 -> 64
+
+parseHashFormat :: Text -> Either ErrorCall HashFormatName
+parseHashFormat =
+  \case
+    "base16" -> Right HashFormatBase16
+    "nix32"  -> Right HashFormatNix32
+    "base32" -> Right HashFormatNix32
+    "base64" -> Right HashFormatBase64
+    "sri"    -> Right HashFormatSRI
+    x        -> Left $ ErrorCall $ "builtins.convertHash: unknown hash format " <> show x
+
+decodeBase16 :: Text -> Either String B.ByteString
+decodeBase16 t = convertFromBase Base16 (encodeUtf8 t :: B.ByteString)
+
+decodeBase64 :: Text -> Either String B.ByteString
+decodeBase64 t = convertFromBase Base64 (encodeUtf8 t :: B.ByteString)
+
+decodeNix32 :: Text -> Either String B.ByteString
+decodeNix32 = Base32.decode
+
+encodeBase16 :: B.ByteString -> Text
+encodeBase16 bs = decodeUtf8 (convertToBase Base16 bs :: B.ByteString)
+
+encodeBase64 :: B.ByteString -> Text
+encodeBase64 bs = decodeUtf8 (convertToBase Base64 bs :: B.ByteString)
+
+convertHashNix
+  :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
+convertHashNix nv =
+  do
+    attrs <- fromValue @(AttrSet (NValue t f m)) =<< demand nv
+
+    hashText <-
+      fromStringNoContext
+        =<< fromValue
+        =<< demand
+        =<< attrsetGet "hash" attrs
+
+    mAlgoText <-
+      traverse
+        (fromStringNoContext <=< fromValue <=< demand)
+        (A.lookup (mkVarName "hashAlgo") attrs)
+
+    mAlgo <-
+      case mAlgoText of
+        Nothing -> pure Nothing
+        Just t ->
+          case hashAlgoFromText t of
+            Just a  -> pure (Just a)
+            Nothing -> throwError $ ErrorCall $ "builtins.convertHash: unknown hash algorithm " <> show t
+
+    toHashFormatText <-
+      fromStringNoContext
+        =<< fromValue
+        =<< demand
+        =<< attrsetGet "toHashFormat" attrs
+
+    toFormat <-
+      case parseHashFormat toHashFormatText of
+        Left err -> throwError err
+        Right v -> pure v
+
+    (algo, bytes) <- parseInputHash mAlgo hashText
+
+    let
+      rendered =
+        case toFormat of
+          HashFormatBase16 -> encodeBase16 bytes
+          HashFormatNix32  -> Base32.encode bytes
+          HashFormatBase64 -> encodeBase64 bytes
+          HashFormatSRI    -> hashAlgoToText algo <> "-" <> encodeBase64 bytes
+
+    toValue $ mkNixStringWithoutContext rendered
+
+ where
+  parseInputHash
+    :: Maybe HashAlgoName
+    -> Text
+    -> m (HashAlgoName, B.ByteString)
+  parseInputHash mAlgo input =
+    do
+      let
+        (algoFromHash, body, mFormat) = parseHashPrefix input
+
+      algo <-
+        case (mAlgo, algoFromHash) of
+          (Just a, Just b) | a /= b ->
+            throwError $ ErrorCall $ "builtins.convertHash: hashAlgo " <> show (hashAlgoToText a)
+              <> " does not match hash prefix " <> show (hashAlgoToText b)
+          (Just a, _) -> pure a
+          (Nothing, Just b) -> pure b
+          (Nothing, Nothing) ->
+            throwError $ ErrorCall "builtins.convertHash: missing hashAlgo"
+
+      bytes <- decodeHash algo mFormat body
+      pure (algo, bytes)
+
+  parseHashPrefix :: Text -> (Maybe HashAlgoName, Text, Maybe HashFormatName)
+  parseHashPrefix t =
+    case Text.breakOn "-" t of
+      (algoTxt, rest)
+        | Just algo <- hashAlgoFromText algoTxt
+        , not (Text.null rest) ->
+            (Just algo, Text.drop 1 rest, Just HashFormatBase64)
+      _ ->
+        case Text.breakOn ":" t of
+          (algoTxt, rest)
+            | Just algo <- hashAlgoFromText algoTxt
+            , not (Text.null rest) ->
+                (Just algo, Text.drop 1 rest, Nothing)
+          _ -> (Nothing, t, Nothing)
+
+  decodeHash
+    :: HashAlgoName
+    -> Maybe HashFormatName
+    -> Text
+    -> m B.ByteString
+  decodeHash algo mFormat body =
+    do
+      let expectedLen = hashAlgoDigestLength algo
+
+          tryDecode fmt =
+            case fmt of
+              HashFormatBase16 -> decodeBase16 body
+              HashFormatNix32  -> decodeNix32 body
+              HashFormatBase64 -> decodeBase64 body
+              HashFormatSRI    -> decodeBase64 body
+
+          accept bs =
+            if B.length bs == expectedLen
+              then Just bs
+              else Nothing
+
+          formats =
+            case mFormat of
+              Just fmt -> [fmt]
+              Nothing  -> [HashFormatBase16, HashFormatNix32, HashFormatBase64]
+
+          tryFormats [] = Nothing
+          tryFormats (fmt:rest) =
+            case tryDecode fmt of
+              Right bs ->
+                case accept bs of
+                  Just ok -> Just ok
+                  Nothing ->
+                    case mFormat of
+                      Just _ ->
+                        Nothing
+                      Nothing ->
+                        tryFormats rest
+              Left _ -> tryFormats rest
+
+      case tryFormats formats of
+        Just bs -> pure bs
+        Nothing -> throwError $ ErrorCall $ "builtins.convertHash: could not decode hash " <> show body
+
+
+placeHolderNix :: forall t f m e . MonadNix e t f m => NValue t f m -> m (NValue t f m)
+placeHolderNix p =
+  do
+    t <- fromStringNoContext =<< fromValue p
+    h <-
+      coerce @(Prim m NixString) @(m NixString) $
+        (hashStringNix `on` mkNixStringWithoutContext)
+          "sha256"
+          ("nix-output:" <> t)
+    toValue
+      $ mkNixStringWithoutContext
+      $ Text.cons '/'
+      $ Base32.encode
+      -- Please, stop Text -> Bytestring here after migration to Text
+      $ case Base16.decode (bytes h) of -- The result coming out of hashString is base16 encoded
+#if MIN_VERSION_base16_bytestring(1,0,0)
+        -- Please, stop Text -> String here after migration to Text
+        Left e -> error $ "Couldn't Base16 decode the text: '" <> body h <> "'.\nThe Left fail content: '" <> show e <> "'."
+        Right d -> d
+#else
+        (d, "") -> d
+        (_, e) -> error $ "Couldn't Base16 decode the text: '" <> body h <> "'.\nUndecodable remainder: '" <> show e <> "'."
+#endif
+    where
+      bytes :: NixString -> ByteString
+      bytes = encodeUtf8 . body
+
+      body = ignoreContext

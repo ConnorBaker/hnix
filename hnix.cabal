@@ -402,9 +402,12 @@ library
     Nix.Builtins
     Nix.Builtins.Arithmetic
     Nix.Builtins.AttrSet
+    Nix.Builtins.Context
     Nix.Builtins.Control
+    Nix.Builtins.Fetch
     Nix.Builtins.Internal
     Nix.Builtins.List
+    Nix.Builtins.Path
     Nix.Builtins.String
     Nix.Builtins.Type
     Nix.Cache
