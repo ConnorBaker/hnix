@@ -15,6 +15,7 @@ packages:
   ./hnix-types
   ./signatures/hnix-attrset-sig
   ./signatures/hnix-list-sig
+  ./signatures/hnix-value-protocol-sig
   ./implementations/hnix-attrset-hashmap
   ./implementations/hnix-list-vector
   ./hnix-core

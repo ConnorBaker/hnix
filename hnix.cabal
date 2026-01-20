@@ -389,7 +389,14 @@ common shared
 library
   import: shared
   -- Backpack instantiation: hnix-core uses abstract AttrSet and NixList
-  -- which we instantiate with HashMap and Vector implementations
+  -- which we instantiate with HashMap and Vector implementations.
+  --
+  -- NOTE: hnix-list-vector also provides Nix.List.Vector.Builtins, but
+  -- those builtins require Nix.Value.Protocol. Due to Backpack's cycle
+  -- restrictions, we cannot satisfy that requirement from this library
+  -- (it would create a cycle). For now, builtins remain in Nix.Builtins.List.
+  -- A future refactoring could move the value infrastructure to a separate
+  -- package to enable swappable builtins.
   mixins:
     hnix-core
       requires
@@ -460,6 +467,7 @@ library
     Nix.Value.Equal
     Nix.Value.Interned
     Nix.Value.Monad
+    Nix.Value.Protocol
     Nix.XML
   other-modules:
     Paths_hnix

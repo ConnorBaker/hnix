@@ -4,6 +4,12 @@ version:        0.17.0
 synopsis:       Vector implementation for HNix NixList signature
 description:    Provides a Vector-backed implementation of the NixList signature.
                 Offers O(1) length and indexing, ideal for Nix list operations.
+
+                NOTE: The Nix.List.Vector.Builtins module is not currently exposed
+                due to Backpack cycle restrictions. Builtins remain in the main
+                hnix library (Nix.Builtins.List). A future refactoring that moves
+                the value infrastructure to a separate package would enable
+                swappable list builtins.
 category:       System, Data, Nix
 license:        BSD-3-Clause
 license-file:   ../../License
@@ -32,8 +38,14 @@ library
   if flag(strict)
     default-extensions:
       Strict
+  -- NOTE: Nix.List.Vector.Builtins requires Nix.Value.Protocol signature.
+  -- Due to Backpack cycle restrictions, we don't expose that module here.
+  -- The builtins source is kept for future use when the value infrastructure
+  -- is refactored into a separate package.
   exposed-modules:
     Nix.List.Vector
+  -- other-modules:
+  --   Nix.List.Vector.Builtins
   hs-source-dirs:
     src
   build-depends:

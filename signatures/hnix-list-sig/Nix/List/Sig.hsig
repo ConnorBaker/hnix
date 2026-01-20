@@ -7,6 +7,10 @@
 --
 -- Note: For pure folds, use the Foldable instance (foldl', foldr, etc.)
 -- The monadic versions here are for Nix builtins that take Nix closures.
+--
+-- NOTE: Nix builtins (lengthNix, mapNix, etc.) are NOT in this signature
+-- to avoid circular dependencies with the value protocol. They are
+-- implemented in Nix.List.Vector.Builtins module instead.
 signature Nix.List.Sig where
 
 import Control.DeepSeq (NFData)
