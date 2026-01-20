@@ -36,7 +36,6 @@ module Nix.Parser
   , nixNull
   , whiteSpace
 
-  --  2022-01-26: NOTE: Try to hide it after OperatorInfo is removed
   , NOp(..)
   , appOpDef
   )

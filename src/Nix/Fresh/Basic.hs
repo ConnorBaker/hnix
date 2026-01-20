@@ -18,7 +18,7 @@ import           Nix.Value
 
 type StdIdT = FreshIdT Int
 
--- NOTE: These would be removed by: https://github.com/haskell-nix/hnix/pull/804
+-- These derive-through instances lift effect typeclasses through the StdIdT transformer.
 instance (MonadFail m, MonadFile m) => MonadFile (StdIdT m)
 instance MonadIntrospect m => MonadIntrospect (StdIdT m)
 instance MonadStore m => MonadStore (StdIdT m)

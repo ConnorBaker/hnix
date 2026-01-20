@@ -224,7 +224,7 @@ main' opts@Options{..} =
   withEmptyNixContext :: (StdBase m, KnownEvalCfg cfg, SBoolI prov, Typeable prov, GivenStdInterned prov cfg m) => StdM prov cfg m a -> StdM prov cfg m a
   withEmptyNixContext = withNixContext mempty
 
-  --  2021-07-15: NOTE: @handleResult@ & @process@ - have atrocious size & compexity, they need to be decomposed & refactored.
+  -- NOTE: @handleResult@ & @process@ have significant size & complexity - consider decomposing.
   handleResult
     :: forall (prov :: Bool) (cfg :: EvalCfg) m err. (StdBase m, KnownEvalCfg cfg, SBoolI prov, Typeable prov, GivenStdInterned prov cfg m, Show err)
     => Maybe Path -> Either err NExprLoc -> StdM prov cfg m ()

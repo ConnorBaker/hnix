@@ -103,8 +103,8 @@ nixEvalExprLocT
 nixEvalExprLocT mpath = withNixContext mpath . evalExprLocT
 
 -- | Evaluate a nix expression with tracing in the default context. Note that
---   this function doesn't do any tracing itself, but 'evalExprLoc' will be
---   'tracing' is set to 'True' in the Options structure (accessible through
+--   this function doesn't do any tracing itself, but 'evalExprLoc' will trace
+--   if 'tracing' is set to 'True' in the Options structure (accessible through
 --   'MonadNix'). All this function does is provide the right type class
 --   context.
 nixTracingEvalExprLoc
