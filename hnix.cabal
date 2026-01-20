@@ -401,6 +401,7 @@ library
     Nix.Atoms
     Nix.Builtins
     Nix.Builtins.Internal
+    Nix.Builtins.List
     Nix.Builtins.String
     Nix.Builtins.Type
     Nix.Cache
