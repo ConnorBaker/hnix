@@ -2,12 +2,9 @@
 {-# language CPP #-}
 {-# language ConstraintKinds #-}
 {-# language DataKinds #-}
-{-# language FunctionalDependencies #-}
 {-# language KindSignatures #-}
 {-# language MonoLocalBinds #-}
-{-# language MultiWayIf #-}
 {-# language PartialTypeSignatures #-}
-{-# language PatternSynonyms #-}
 {-# language QuasiQuotes #-}
 {-# language TemplateHaskell #-}
 {-# language UndecidableInstances #-}
@@ -36,13 +33,10 @@ import           Data.ByteArray.Encoding        ( Base(Base16, Base64)
                                                 , convertFromBase
                                                 , convertToBase
                                                 )
-import           Data.Align                     ( alignWith )
 import           Data.Array
 import           Data.Bits
 import qualified Data.ByteString               as B
 import           Data.ByteString.Base16        as Base16
-import           Data.Char                      ( isDigit )
-import           Data.Foldable                  ( foldrM )
 import           Data.Fix                       ( foldFix )
 import qualified Data.HashSet                  as HS
 import qualified Data.HashMap.Strict           as HM
@@ -53,9 +47,7 @@ import           Data.Sequence                  ( ViewL(..), (><) )
 import qualified Data.Map.Strict               as M
 import qualified Data.Set                      as S
 import qualified Data.Text                     as Text
-import           Data.Text.Read                 ( decimal )
 import qualified Data.Text.Lazy.Builder        as Builder
-import           Data.These                     ( fromThese, These )
 import qualified Data.Time.Clock.POSIX         as Time
 import qualified Data.Time.Calendar            as Time
 import qualified Data.Time.LocalTime           as Time
@@ -64,6 +56,7 @@ import           Text.Printf                    ( printf )
 import           Data.Fixed                     ( Pico )
 import           NeatInterpolation              ( text )
 import           Nix.Atoms
+import           Nix.Builtins.Internal
 import           Nix.Convert
 import           Nix.Core.List                  ( NixList )
 import qualified Nix.Core.List                 as L
@@ -105,7 +98,6 @@ import qualified System.Nix.StorePath          as Store
 import           System.Nix.Base32             as Base32
 import           System.Nix.FileContentAddress  ( FileIngestionMethod(..) )
 import           System.Nix.ContentAddress      ( ContentAddressMethod(..) )
-import qualified Text.Show
 import           Text.Regex.TDFA                ( Regex
                                                 , makeRegexOpts
                                                 , matchOnceText
@@ -119,270 +111,6 @@ import qualified Toml
 -- This is a big module. There is recursive reuse:
 -- @builtins -> builtinsList -> scopedImport -> withNixContext -> builtins@,
 -- since @builtins@ is self-recursive: aka we ship @builtins.builtins.builtins...@.
-
--- * Internal
-
--- ** Nix Builtins Haskell type level
-
-newtype Prim m a = Prim (m a)
-
-data BuiltinType = Normal | TopLevel
-data Builtin v =
-  Builtin
-    { _kind   :: BuiltinType
-    , mapping :: (VarName, v)
-    }
-
--- *** @class ToBuiltin@ and its instances
-
--- | Types that support conversion to nix in a particular monad
-class ToBuiltin t f m a | a -> m where
-  toBuiltin :: Text -> a -> m (NValue t f m)
-
-instance
-  ( MonadNix e t f m
-  , ToValue a m (NValue t f m)
-  )
-  => ToBuiltin t f m (Prim m a) where
-  toBuiltin _ p = toValue @a @m =<< coerce p
-
-instance
-  ( MonadNix e t f m
-  , FromValue a m (Deeper (NValue t f m))
-  , ToBuiltin t f m b
-  )
-  => ToBuiltin t f m (a -> b) where
-  toBuiltin name f =
-    pure $ NVBuiltin (mkVarName name) $ toBuiltin name . f <=< fromValue . Deeper
-
--- *** @WValue@ closure wrapper to have @Ord@
-
--- We wrap values solely to provide an Ord instance for genericClosure
-newtype WValue t f m = WValue (NValue t f m)
-
-instance NVConstraint f => Eq (WValue t f m) where
-  WValue (NVConstant (NFloat x)) == WValue (NVConstant (NInt y)) =
-    x == fromIntegral y
-  WValue (NVConstant (NInt   x)) == WValue (NVConstant (NFloat y)) =
-    fromIntegral x == y
-  WValue (NVConstant (NInt   x)) == WValue (NVConstant (NInt   y)) = x == y
-  WValue (NVConstant (NFloat x)) == WValue (NVConstant (NFloat y)) = x == y
-  WValue (NVPath     x         ) == WValue (NVPath     y         ) = x == y
-  WValue (NVStr x) == WValue (NVStr y) =
-    ignoreContext x == ignoreContext y
-  _ == _ = False
-
-instance NVConstraint f => Ord (WValue t f m) where
-  WValue (NVConstant (NFloat x)) <= WValue (NVConstant (NInt y)) =
-    x <= fromIntegral y
-  WValue (NVConstant (NInt   x)) <= WValue (NVConstant (NFloat y)) =
-    fromIntegral x <= y
-  WValue (NVConstant (NInt   x)) <= WValue (NVConstant (NInt   y)) = x <= y
-  WValue (NVConstant (NFloat x)) <= WValue (NVConstant (NFloat y)) = x <= y
-  WValue (NVPath     x         ) <= WValue (NVPath     y         ) = x <= y
-  WValue (NVStr x) <= WValue (NVStr y) =
-    ignoreContext x <= ignoreContext y
-  _ <= _ = False
-
--- ** Helpers
-
-pattern NVBool :: MonadNix e t f m => Bool -> NValue t f m
-pattern NVBool a = NVConstant (NBool a)
-
-data NixPathEntryType
-  = PathEntryPath
-  | PathEntryURI
- deriving (Show, Eq)
-
--- | @NIX_PATH@ is colon-separated, but can also contain URLs, which have a colon
--- (i.e. @https://...@)
-uriAwareSplit :: Text -> [(Text, NixPathEntryType)]
-uriAwareSplit txt =
-  case Text.break (== ':') txt of
-    (e1, e2)
-      | Text.null e2                              -> one (e1, PathEntryPath)
-      | "://" `Text.isPrefixOf` e2      ->
-        let ((suffix, _) : path) = uriAwareSplit (Text.drop 3 e2) in
-        (e1 <> "://" <> suffix, PathEntryURI) : path
-      | otherwise                                 -> (e1, PathEntryPath) : uriAwareSplit (Text.drop 1 e2)
-
-foldNixPath
-  :: forall e t f m r
-   . MonadNix e t f m
-  => r
-  -> (Path -> Maybe Text -> NixPathEntryType -> r -> m r)
-  -> m r
-foldNixPath z f =
-  do
-    mres <- lookupVar "__includes"
-    dirs <-
-      case mres of
-        Nothing -> stub
-        Just v -> (fromValue . Deeper) =<< demand v
-    mPath    <- getEnvVar "NIX_PATH"
-    mDataDir <- getEnvVar "NIX_DATA_DIR"
-    dataDir  <-
-      case mDataDir of
-        Nothing -> getDataDir
-        Just v -> pure . coerce . toString $ v
-
-    foldrM
-      fun
-      z
-      $ (fromInclude . ignoreContext <$> dirs)
-        <> uriAwareSplit `whenJust` mPath
-        <> one (fromInclude $ "nix=" <> fromString (coerce dataDir) <> "/nix/corepkgs")
- where
-
-  fromInclude :: Text -> (Text, NixPathEntryType)
-  fromInclude x =
-    (x, ) $
-      if "://" `Text.isInfixOf` x
-        then PathEntryURI
-        else PathEntryPath
-
-  fun :: (Text, NixPathEntryType) -> r -> m r
-  fun (x, ty) rest =
-    case Text.splitOn "=" x of
-      [p] -> f (coerce $ toString p) mempty ty rest
-      [n, p] -> f (coerce $ toString p) (pure n) ty rest
-      _ -> throwError $ ErrorCall $ "Unexpected entry in NIX_PATH: " <> show x
-
-attrsetGet :: MonadNix e t f m => VarName -> AttrSet (NValue t f m) -> m (NValue t f m)
-attrsetGet k s =
-  case A.lookup k s of
-    Nothing -> throwError $ ErrorCall $ toString @Text $ "Attribute '" <> varNameText k <> "' required"
-    Just v -> pure v
-
-data VersionComponent
-  = VersionComponentPre -- ^ The string "pre"
-  | VersionComponentString !Text -- ^ A string other than "pre"
-  | VersionComponentNumber !Integer -- ^ A number
-  deriving (Read, Eq, Ord)
-
-instance Show VersionComponent where
-  show =
-    \case
-      VersionComponentPre      -> "pre"
-      VersionComponentString s -> show s
-      VersionComponentNumber n -> show n
-
-splitVersion :: Text -> [VersionComponent]
-splitVersion s =
-  (\ (x, xs) -> if
-    | isRight eDigitsPart ->
-        case eDigitsPart of
-          Left e -> error $ "splitVersion: did hit impossible: '" <> fromString e <> "' while parsing '" <> s <> "'."
-          Right res ->
-            one (VersionComponentNumber $ fst res)
-            <> splitVersion (snd res)
-
-    | x `elem` separators -> splitVersion xs
-
-    | otherwise -> one charsPart <> splitVersion rest2
-  ) `whenJust` Text.uncons s
- where
-  -- | Based on https://github.com/NixOS/nix/blob/4ee4fda521137fed6af0446948b3877e0c5db803/src/libexpr/names.cc#L44
-  separators :: String
-  separators = ".-"
-
-  eDigitsPart :: Either String (Integer, Text)
-  eDigitsPart = decimal @Integer $ s
-
-  (charsSpan, rest2) =
-    Text.span
-      (\c -> not $ isDigit c || c `elem` separators)
-      s
-
-  charsPart :: VersionComponent
-  charsPart =
-    case charsSpan of
-      "pre" -> VersionComponentPre
-      xs'   -> VersionComponentString xs'
-
-
-compareVersions :: Text -> Text -> Ordering
-compareVersions s1 s2 =
-  fold $ (alignWith cmp `on` splitVersion) s1 s2
- where
-  cmp :: These VersionComponent VersionComponent -> Ordering
-  cmp = uncurry compare . join fromThese (VersionComponentString mempty)
-
-splitDrvName :: Text -> (Text, Text)
-splitDrvName s =
-  both (Text.intercalate sep) (namePieces, versionPieces)
- where
-  sep    = "-"
-  pieces :: [Text]
-  pieces = Text.splitOn sep s
-  isFirstVersionPiece :: Text -> Bool
-  isFirstVersionPiece p =
-    case Text.uncons p of
-      Nothing -> False
-      Just (c, _) -> isDigit c
-  -- Like 'break', but always puts the first item into the first result
-  -- list
-  breakAfterFirstItem :: (a -> Bool) -> [a] -> ([a], [a])
-  breakAfterFirstItem f =
-    handlePresence
-      mempty
-      (\ (h : t) -> let (a, b) = break f t in (h : a, b))
-  (namePieces, versionPieces) =
-    breakAfterFirstItem isFirstVersionPiece pieces
-
-splitMatches
-  :: forall e t f m
-   . MonadNix e t f m
-  => Int
-  -> [[(ByteString, (Int, Int))]]
-  -> ByteString
-  -> [NValue t f m]
-splitMatches _ [] haystack = one $ thunkStr haystack
-splitMatches _ ([] : _) _ =
-  fail "Fail in splitMatches: this should never happen!"
-splitMatches numDropped (((_, (start, len)) : captures) : mts) haystack =
-  thunkStr before : caps : splitMatches (numDropped + relStart + len)
-                                        mts
-                                        (B.drop len rest)
- where
-  relStart       = max 0 start - numDropped
-  (before, rest) = B.splitAt relStart haystack
-  caps :: NValue t f m
-  caps           = NVList (L.nlFromList $ f <$> captures)
-  f :: (ByteString, (Int, b)) -> NValue t f m
-  f (a, (s, _))  =
-    if s >= 0
-      then thunkStr a
-      else NVNull
-
-thunkStr :: NVConstraint f => ByteString -> NValue t f m
-thunkStr s = mkNVStrWithoutContext $ decodeUtf8 s
-
--- | Check if a value is of a specific type. Returns interned boolean.
-hasKind
-  :: forall a e t f m
-   . (MonadNix e t f m, FromValue a m (NValue t f m))
-  => NValue t f m
-  -> m (NValue t f m)
-hasKind nv = do
-  mv <- fromValueMay @a nv
-  askInternedBool $ isJust mv
-
-
-absolutePathFromValue :: MonadNix e t f m => NValue t f m -> m Path
-absolutePathFromValue =
-  \case
-    NVStr ns ->
-      do
-        let
-          path = coerce . toString $ ignoreContext ns
-
-        when (not (isAbsolute path)) $ throwError $ ErrorCall $ "string " <> show path <> " doesn't represent an absolute path"
-        pure path
-
-    NVPath path -> pure path
-    v           -> throwError $ ErrorCall $ "expected a path, got " <> show v
-
 
 -- ** Builtin functions
 

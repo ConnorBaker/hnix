@@ -28,7 +28,7 @@ import           Relude
 
 import           Control.Monad.Free             ( Free(..) )
 import           Data.Functor.Identity          ()
-import qualified Data.Vector                   as V
+import           Nix.List.Vector                ( NixList )
 import           Test.Inspection
 
 import           Nix.Atoms                      ( NAtom(..) )
@@ -60,7 +60,7 @@ testMkNVPath = NVPathF
 {-# NOINLINE testMkNVPath #-}
 
 -- | Test constructing an NVListF directly.
-testMkNVList :: V.Vector r -> NValueF p m r
+testMkNVList :: NixList r -> NValueF p m r
 testMkNVList = NVListF
 {-# NOINLINE testMkNVList #-}
 

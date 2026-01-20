@@ -400,6 +400,7 @@ library
     Nix.Utils
     Nix.Atoms
     Nix.Builtins
+    Nix.Builtins.Internal
     Nix.Cache
     Nix.Config.Singleton
     Nix.Cited
@@ -637,6 +638,7 @@ test-suite hnix-inspection
     tests/inspection
   build-depends:
     hnix
+    , hnix-list-vector
     , comonad
     , free
     , inspection-testing
