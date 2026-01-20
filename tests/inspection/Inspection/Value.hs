@@ -28,7 +28,7 @@ import           Relude
 
 import           Control.Monad.Free             ( Free(..) )
 import           Data.Functor.Identity          ()
-import           Nix.List.Vector                ( NixList )
+import           Nix.Core.List                  ( NixList )
 import           Test.Inspection
 
 import           Nix.Atoms                      ( NAtom(..) )

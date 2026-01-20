@@ -430,6 +430,10 @@ library
         (Nix.AttrSet.Sig as Nix.AttrSet.HashMap,
          Nix.List.Sig as Nix.List.Vector,
          Nix.String.Sig as Nix.String.Text)
+  -- Re-export instantiated Backpack modules so dependents can import them
+  reexported-modules:
+    Nix.Core.AttrSet
+    , Nix.Core.List
   exposed-modules:
     Nix
     Nix.Prelude
@@ -642,39 +646,47 @@ test-suite hnix-tests
 
 -- benchmark hnix-benchmarks
 
--- benchmark hnix-weigh
+benchmark hnix-weigh
+  import: shared
+  type: exitcode-stdio-1.0
+  main-is: Main.hs
+  hs-source-dirs:
+    benchmarks/weigh
+  build-depends:
+      hnix
+    , exceptions
+    , time
+    , unordered-containers
+    , vector
+    , weigh
 
--- TODO: Fix inspection tests - they need hnix-list-vector dependency
--- which creates unfilled Backpack requirements. Need to either:
--- 1. Re-export NixList from hnix
--- 2. Create a separate instantiated package for testing
--- test-suite hnix-inspection
---   import: shared
---   type: exitcode-stdio-1.0
---   main-is: Main.hs
---   other-modules:
---     Inspection.AttrSet
---     Inspection.Cited
---     Inspection.Coerce
---     Inspection.Comonad
---     Inspection.Config
---     Inspection.Convert
---     Inspection.Functor
---     Inspection.HasCitations
---     Inspection.Integration
---     Inspection.MonadThunk
---     Inspection.NixString
---     Inspection.Scope
---     Inspection.Singleton
---     Inspection.Thunk
---     Inspection.Types
---     Inspection.Value
---   hs-source-dirs:
---     tests/inspection
---   build-depends:
---       hnix
---     , comonad
---     , free
---     , inspection-testing
---     , template-haskell
---     , vector
+test-suite hnix-inspection
+  import: shared
+  type: exitcode-stdio-1.0
+  main-is: Main.hs
+  other-modules:
+    Inspection.AttrSet
+    Inspection.Cited
+    Inspection.Coerce
+    Inspection.Comonad
+    Inspection.Config
+    Inspection.Convert
+    Inspection.Functor
+    Inspection.HasCitations
+    Inspection.Integration
+    Inspection.MonadThunk
+    Inspection.NixString
+    Inspection.Scope
+    Inspection.Singleton
+    Inspection.Thunk
+    Inspection.Types
+    Inspection.Value
+  hs-source-dirs:
+    tests/inspection
+  build-depends:
+      hnix
+    , comonad
+    , free
+    , inspection-testing
+    , template-haskell
+    , vector

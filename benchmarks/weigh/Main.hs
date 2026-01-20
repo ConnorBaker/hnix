@@ -31,6 +31,7 @@ import Data.Singletons.Bool (sbool)
 import Nix (NixException (..), SBool (..), SBoolI, VarName, defaultOptions,
             nixEvalExpr, normalForm, parseNixText, renderFrames)
 import Nix.Config.Singleton (DefaultCfg)
+import qualified Nix.Core.AttrSet as AttrSet
 import Nix.Scope (Scope (..), scopeLookup)
 import Nix.Standard (StdM, ThunkF, ValueF, runWithBasicEffects)
 
@@ -369,11 +370,11 @@ evalNix src = do
 
 -- | Create a scope with a single binding.
 mkSingletonScope :: (VarName, a) -> Scope a
-mkSingletonScope (k, v) = Scope (HM.singleton k v)
+mkSingletonScope (k, v) = Scope (AttrSet.singleton k v)
 
 -- | Create a scope with @n@ bindings named @var_1@ through @var_n@.
 mkScopeN :: Int -> a -> Scope a
-mkScopeN n v = Scope $ HM.fromList [(fromString ("var_" <> show i), v) | i <- [1..n]]
+mkScopeN n v = Scope $ AttrSet.fromList [(fromString ("var_" <> show i), v) | i <- [1..n]]
 
 -- | Create @n@ key-value pairs for HashMap benchmarks.
 mkPairs :: Int -> [(VarName, Int)]
