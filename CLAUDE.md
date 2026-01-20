@@ -616,6 +616,8 @@ hnix --eval --expr "import <nixpkgs> {}" --find
 
 HNix uses GHC Backpack for compile-time swapping of data structure implementations with guaranteed monomorphization (no dictionary passing at runtime).
 
+For comprehensive documentation including goals, design rationale, and how to add alternative implementations, see [doc/backpack-architecture.md](doc/backpack-architecture.md).
+
 ### Package Structure
 
 ```

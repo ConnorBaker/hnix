@@ -339,6 +339,8 @@ HNix uses GHC Backpack for compile-time swappable data structure implementations
 
 The main `hnix` package instantiates these signatures via Cabal mixins, selecting the concrete implementations.
 
+For detailed information about the Backpack architecture, goals, and how to add alternative implementations, see [doc/backpack-architecture.md](doc/backpack-architecture.md).
+
 
 ## Current status
 
