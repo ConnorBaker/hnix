@@ -55,22 +55,31 @@ library
     Nix.Value.Core.Thunk.Basic
     Nix.Value.Core.Frames
     Nix.Value.Core.Monad
+    Nix.Value.Core.String
+    Nix.Value.Core.Value
   hs-source-dirs:
     src
   build-depends:
       base >= 4.12 && < 5
+    , aeson >= 1.4.2
+    , comonad >= 5.0.8
     , deepseq >= 1.4.3
     , exceptions >= 0.10.0
+    , free >= 5.1
+    , hashable >= 1.2.5
     , hnix-types
     , hnix-attrset-sig
     , hnix-list-sig
     , hnix-core
     , lens-family >= 1.2.2
     , lens-family-core >= 1.2.2
+    , lens-family-th >= 0.5.0.2
     , mtl >= 2.2.2
     , ref-tf >= 0.5
     , relude >= 1.0.0
+    , text >= 1.2.3
     , transformers >= 0.5.5
+    , unordered-containers >= 0.2.14
   ghc-options:
     -Wall
     -Wno-incomplete-uni-patterns

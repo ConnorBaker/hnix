@@ -2,6 +2,7 @@
 module Nix.Core.Utils
   ( Has(..)
   , askLocal
+  , whenTrue
   ) where
 
 import Relude
@@ -23,3 +24,13 @@ instance Has (a, b) b where
 -- | Retrieve monad state by 'Lens''.
 askLocal :: (MonadReader t m, Has t a) => m a
 askLocal = asks $ view hasLens
+
+-- | Returns the first argument if the Bool is True, otherwise mempty.
+-- Note: Uses lazy pattern on first argument to preserve short-circuit
+-- behavior under the Strict extension.
+whenTrue :: Monoid a => a -> Bool -> a
+whenTrue ~x b =
+  if b
+    then x
+    else mempty
+{-# INLINABLE whenTrue #-}
