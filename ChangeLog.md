@@ -1,6 +1,28 @@
 
 # ChangeLog
 
+## Unreleased
+
+* Additional:
+  * GHC Backpack modularization for swappable data structure implementations:
+    * **New package `hnix-string-sig`**: Backpack signature for NixString operations.
+    * **New package `hnix-string-text`**: Text-backed NixString implementation.
+    * **New package `hnix-builtins-list`**: List builtins as indefinite package.
+    * **New package `hnix-builtins-attrset`**: AttrSet builtins as indefinite package.
+    * **New package `hnix-builtins-string`**: String builtins as indefinite package.
+  * `hnix-value-core`:
+    * Added `Nix.Value.Core.Equal` module for value equality.
+    * Added `Nix.Value.Core.Interned` module for interned value constants.
+    * Added `Nix.Value.Core.Protocol` module for value protocol types.
+  * Type-level provenance system with zero-cost abstraction when disabled.
+  * Explicit `prov :: Bool` type parameter throughout evaluation stack.
+
+* Breaking:
+  * `Nix.String`:
+    * `StringContext` and `ContextFlavor` now use smart constructors instead of pattern synonyms (Backpack limitation).
+    * Use `mkDirectPath`, `mkAllOutputs`, `mkDerivationOutput` for construction.
+    * Use `isDirectPath`, `isAllOutputs`, `isDerivationOutput` for pattern matching.
+
 ## [(diff)](https://github.com/haskell-nix/hnix/compare/0.16.0...0.17.0#files_bucket) 0.17.0
 
 * Additional

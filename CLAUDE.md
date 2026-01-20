@@ -49,17 +49,17 @@ nix develop ".?submodules=1#" --command cabal test --test-options="-j1"
 nix develop ".?submodules=1#" --command cabal test
 
 # All tests including Nixpkgs parsing (slow)
-env ALL_TESTS=yes cabal v2-test
+env ALL_TESTS=yes cabal test
 
 # Only Nixpkgs compatibility tests
-env NIXPKGS_TESTS=yes cabal v2-test
+env NIXPKGS_TESTS=yes cabal test
 
 # Pretty-printer round-trip tests
-env PRETTY_TESTS=yes cabal v2-test
+env PRETTY_TESTS=yes cabal test
 
 # Test with coverage
-cabal v2-configure --enable-coverage
-cabal v2-test --enable-coverage
+cabal configure --enable-coverage
+cabal test --enable-coverage
 ```
 
 **Note on Test Flakiness:** The test suite has intermittent failures when run in parallel due to race conditions. Use `--test-options="-j1"` for reliable single-threaded execution.
@@ -96,14 +96,14 @@ nix develop ".?submodules=1#" --command bash tests/parser-compare/03-edge-cases.
 ### Debugging & Profiling
 ```bash
 # Memory profiling (upload .prof to speedscope.app)
-cabal v2-run --enable-profiling --flags=profiling \
+cabal run --enable-profiling --flags=profiling \
   hnix -- --eval --expr 'builtins.length [1 2 3]' +RTS -hy -l
 
 # Stack trace on error
-cabal v2-run hnix -- --trace --eval --expr 'throw "error"' +RTS -xc
+cabal run hnix -- --trace --eval --expr 'throw "error"' +RTS -xc
 
 # Heap profiling for thunk leaks
-cabal v2-run hnix -- --eval --expr 'import <nixpkgs> {}' \
+cabal run hnix -- --eval --expr 'import <nixpkgs> {}' \
   +RTS -h -i0.1 -RTS && hp2ps -e8in -c hnix.hp
 
 # Reduce complex expressions for minimal repro
@@ -612,9 +612,9 @@ hnix --eval --expr "import <nixpkgs> {}" --find
 **In Progress**: Full Nixpkgs evaluation, performance optimization
 **Known Issues**: Tests disabled by default (`doCheck = false`) due to store interaction
 
-## Backpack Infrastructure (In Progress)
+## Backpack Infrastructure
 
-HNix is being modularized using GHC Backpack for compile-time swapping of data structure implementations with guaranteed monomorphization.
+HNix uses GHC Backpack for compile-time swapping of data structure implementations with guaranteed monomorphization (no dictionary passing at runtime).
 
 ### Package Structure
 
@@ -630,25 +630,36 @@ hnix/
 ├── signatures/                      # Backpack signatures (abstract interfaces)
 │   ├── hnix-attrset-sig/            # AttrSet operations signature
 │   │   └── Nix/AttrSet/Sig.hsig
-│   └── hnix-list-sig/               # NixList operations signature
-│       └── Nix/List/Sig.hsig
+│   ├── hnix-list-sig/               # NixList operations signature
+│   │   └── Nix/List/Sig.hsig
+│   └── hnix-string-sig/             # NixString operations signature
+│       └── Nix/String/Sig.hsig
 │
 ├── implementations/                 # Concrete implementations
 │   ├── hnix-attrset-hashmap/        # HashMap-backed AttrSet
 │   │   └── src/Nix/AttrSet/HashMap.hs
-│   └── hnix-list-vector/            # Vector-backed NixList
-│       └── src/Nix/List/Vector.hs
+│   ├── hnix-list-vector/            # Vector-backed NixList
+│   │   └── src/Nix/List/Vector.hs
+│   └── hnix-string-text/            # Text-backed NixString
+│       └── src/Nix/String/Text.hs
 │
-├── hnix-core/                       # Indefinite package (uses signatures)
-│   └── src/Nix/Core/
-│       ├── AttrSet.hs               # Re-exports AttrSet signature
-│       ├── List.hs                  # Re-exports NixList signature
-│       └── Expr/Types.hs            # PositionSet, ParamSet types
+├── hnix-value-core/                 # Core value types (indefinite package)
+│   └── src/Nix/Value/Core/
+│       ├── Value.hs                 # NValue types
+│       ├── Equal.hs                 # Value equality
+│       ├── Interned.hs              # Interned constants
+│       └── Protocol.hs              # Value protocol types
 │
-├── hnix-instantiated/               # Demo instantiation with mixins
-│   └── src/Nix/Instantiated.hs      # Re-exports with concrete types
+├── hnix-builtins-list/              # List builtins (indefinite package)
+│   └── src/Nix/Builtins/List.hs
 │
-└── (main hnix package)              # Currently unchanged, gradual migration
+├── hnix-builtins-attrset/           # AttrSet builtins (indefinite package)
+│   └── src/Nix/Builtins/AttrSet.hs
+│
+├── hnix-builtins-string/            # String builtins (indefinite package)
+│   └── src/Nix/Builtins/String.hs
+│
+└── (main hnix package)              # Instantiates signatures via mixins
 ```
 
 ### Building Individual Packages
@@ -657,16 +668,17 @@ hnix/
 # Build shared types
 nix develop ".?submodules=1#" --command cabal build hnix-types
 
+# Build signatures
+nix develop ".?submodules=1#" --command cabal build hnix-attrset-sig hnix-list-sig hnix-string-sig
+
 # Build implementations
-nix develop ".?submodules=1#" --command cabal build hnix-attrset-hashmap hnix-list-vector
+nix develop ".?submodules=1#" --command cabal build hnix-attrset-hashmap hnix-list-vector hnix-string-text
 
-# Build indefinite package (abstract, not directly usable)
-nix develop ".?submodules=1#" --command cabal build hnix-core
+# Build indefinite packages (abstract, require instantiation)
+nix develop ".?submodules=1#" --command cabal build hnix-value-core
+nix develop ".?submodules=1#" --command cabal build hnix-builtins-list hnix-builtins-attrset hnix-builtins-string
 
-# Build instantiated package (with HashMap/Vector)
-nix develop ".?submodules=1#" --command cabal build hnix-instantiated
-
-# Build main library (still works independently)
+# Build main library (instantiates all signatures)
 nix develop ".?submodules=1#" --command cabal build lib:hnix
 ```
 
@@ -682,20 +694,25 @@ nix develop ".?submodules=1#" --command cabal build lib:hnix
 
 **Completed:**
 - `hnix-types` package with Path, VarName, NSourcePos, NAtom
-- `hnix-attrset-sig` signature defining AttrSet interface
-- `hnix-list-sig` signature defining NixList interface
-- `hnix-attrset-hashmap` HashMap implementation
-- `hnix-list-vector` Vector implementation
-- `hnix-core` indefinite package that uses signatures
-  - `Nix.Core.Expr.Types` with PositionSet, ParamSet types
-- `hnix-instantiated` demo package with working mixins
+- Backpack signatures:
+  - `hnix-attrset-sig` - AttrSet interface
+  - `hnix-list-sig` - NixList interface
+  - `hnix-string-sig` - NixString interface (uses smart constructors, not pattern synonyms)
+- Concrete implementations:
+  - `hnix-attrset-hashmap` - HashMap-backed AttrSet
+  - `hnix-list-vector` - Vector-backed NixList
+  - `hnix-string-text` - Text + HashSet StringContext backed NixString
+- Indefinite packages:
+  - `hnix-value-core` - Core value types
+  - `hnix-builtins-list` - List builtins
+  - `hnix-builtins-attrset` - AttrSet builtins
+  - `hnix-builtins-string` - String builtins
+- Main `hnix` package instantiates all signatures via Cabal mixins
 - Backpack instantiation verified working (GHC monomorphizes correctly)
 
-**Next Steps:**
-1. Continue migrating modules from main hnix to hnix-core
-2. Update main `hnix` package to depend on instantiated hnix-core
-3. Add alternative implementations (Map, Seq) for benchmarking
-4. Add inspection tests to verify monomorphization
+**Future Work:**
+- Add alternative implementations (Map, Seq, ByteString) for benchmarking
+- Add inspection tests to verify monomorphization of new packages
 
 ### Migration Guide
 

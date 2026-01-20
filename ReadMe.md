@@ -12,9 +12,10 @@ Parser, evaluator and type checker for the Nix language written in Haskell.
 
 
 ## Prerequisites
-Tooling is WIP, `nix-shell` and `nix-store` are still used for their purpose, so, to access them Nix is required to be installed.
 
-*Disclaimer*: Since still using Nix for some operations, current `derivationStrict` primOp implementation and so evaluations of a derivation into a store path currently rely on the `hnix-store-remote`, which for those operations relies on the running `nix-daemon`, and so operations use/produce effects into the `/nix/store`. Be cautious - it is effectful (produces `/nix/store` entries).
+Nix is required to be installed, as `nix-store` is used for derivation operations.
+
+*Disclaimer*: The current `derivationStrict` primOp implementation relies on `hnix-store-remote`, which uses the running `nix-daemon` for store operations. Be cautious - it is effectful (produces `/nix/store` entries).
 
 ## Building the project
 
@@ -40,39 +41,38 @@ If you would use our Nix-shell environment for development, you can connect to o
 
 ### Building with Cabal
 
-Cabal [Quickstart](https://cabal.readthedocs.io/en/3.4/nix-local-build.html).
+Cabal [Quickstart](https://cabal.readthedocs.io/en/latest/nix-local-build.html).
 
-1. (Optional), to enter the projects reproducible Nix environment:
+1. Enter the project's reproducible Nix environment:
     ```shell
-    nix-shell
+    nix develop ".?submodules=1#"
     ```
-    
+
 2. Building:
     ```shell
-    cabal v2-configure
-    cabal v2-build
+    cabal build
     ```
-  
+
 3. Loading the project into `ghci` REPL:
     ```shell
-    cabal v2-repl
+    cabal repl
     ```
-    
+
 4. Testing:
 
-  * Default suite:
+  * Default suite (use `-j1` for reliable single-threaded results):
     ```shell
-    cabal v2-test
+    cabal test --test-options="-j1"
     ```
-  
+
   * All available tests:
     ```shell
-    env ALL_TESTS=yes cabal v2-test
+    env ALL_TESTS=yes cabal test
     ```
-    
+
   * Selected (list of tests is in `tests/Main.hs`):
     ```shell
-    env NIXPKGS_TESTS=yes PRETTY_TESTS=1 cabal v2-test
+    env NIXPKGS_TESTS=yes PRETTY_TESTS=1 cabal test
     ```
 
 #### Checking the project
@@ -82,7 +82,7 @@ Cabal [Quickstart](https://cabal.readthedocs.io/en/3.4/nix-local-build.html).
 To run benchmarks:
 
 ```shell
-cabal v2-bench
+cabal bench
 ```
 
 ##### Profiling
@@ -92,7 +92,7 @@ GHC User Manual has a full ["Profiling"](https://ghc.gitlab.haskell.org/ghc/doc/
 To build `hnix` with profiling enabled:
 
 ```shell
-cabal v2-run hnix --enable-profiling --flags=profiling -- <args> +RTS -p
+cabal run hnix --enable-profiling --flags=profiling -- <args> +RTS -p
 ```
 
 Or to put simply:
@@ -103,7 +103,7 @@ Or to put simply:
 #  * time profiling data
 #  * memory allocation profiling data
 #  * in the JSON profiling format
-cabal v2-run --enable-profiling --flags=profiling --enable-library-profiling --profiling-detail='all-functions' hnix -- --eval --expr '(import <nixpkgs> {}).firefox.outPath' +RTS -Pj
+cabal run --enable-profiling --flags=profiling --enable-library-profiling --profiling-detail='all-functions' hnix -- --eval --expr '(import <nixpkgs> {}).firefox.outPath' +RTS -Pj
 
 # Then, upload the `hnix.prof` to the https://www.speedscope.app/ to analyze it.
 ```
@@ -115,17 +115,17 @@ cabal v2-run --enable-profiling --flags=profiling --enable-library-profiling --p
 To run stack traces & full tracing output on `hnix`:
 
 ```shell
-cabal v2-configure --enable-tests --enable-profiling --flags=profiling --flags=tracing
-cabal v2-run hnix -- -v5 --trace <args> +RTS -xc
+cabal configure --enable-tests --enable-profiling --flags=profiling --flags=tracing
+cabal run hnix -- -v5 --trace <args> +RTS -xc
 ```
 
 This would give the most information as to what happens during parsing & evaluation.
 
 
-#### Runing executable
+#### Running executable
 
 ```shell
-cabal v2-run hnix -- --help
+cabal run hnix -- --help
 ```
 (`--` is for separation between `cabal` & `hnix` args)
 
@@ -297,24 +297,47 @@ hnix \
 2. You are free to chat with everyone on [Gitter](https://gitter.im/haskell-nix/Lobby).
 
 3. When the pull request is ready to be submitted, to save time - please, test it with:
-    
+
     ```shell
-    cabal v2-test
+    cabal test --test-options="-j1"
     ```
-    
+
     Please, check that all default tests that were passing prior are still passing. It's OK if no new tests are passing.
-    
-    
+
+
 ### (optional) Minimalistic development status loop with amazing [`ghcid`](https://github.com/ndmitchell/ghcid)
 
-If HLS is not your cup of yea:
+If HLS is not your cup of tea:
 
 ```shell
-ghcid --command="cabal v2-repl --repl-options=-fno-code --repl-options=-fno-break-on-exception --repl-options=-fno-break-on-error --repl-options=-v1 --repl-options=-ferror-spans --repl-options=-j"
+ghcid --command="cabal repl --repl-options=-fno-code --repl-options=-fno-break-on-exception --repl-options=-fno-break-on-error --repl-options=-v1 --repl-options=-ferror-spans --repl-options=-j"
 ```
-(optional) To use projects reproducible environment, wrap `ghcid ...` command into a `nix-shell --command ' '`.
+(optional) To use project's reproducible environment, wrap `ghcid ...` command into `nix develop ".?submodules=1#" --command '...'`.
 
 For simplicity `alias` the command in your shell.
+
+
+## Architecture
+
+HNix uses GHC Backpack for compile-time swappable data structure implementations with guaranteed monomorphization (no dictionary passing at runtime).
+
+### Package Structure
+
+| Package | Purpose |
+|---------|---------|
+| `hnix-types` | Shared fundamental types (Path, VarName, SourcePos, Atom) |
+| `hnix-attrset-sig` | Backpack signature for AttrSet operations |
+| `hnix-list-sig` | Backpack signature for NixList operations |
+| `hnix-string-sig` | Backpack signature for NixString operations |
+| `hnix-attrset-hashmap` | HashMap-backed AttrSet implementation |
+| `hnix-list-vector` | Vector-backed NixList implementation |
+| `hnix-string-text` | Text-backed NixString implementation |
+| `hnix-value-core` | Core value types (indefinite package) |
+| `hnix-builtins-list` | List builtins (indefinite package) |
+| `hnix-builtins-attrset` | AttrSet builtins (indefinite package) |
+| `hnix-builtins-string` | String builtins (indefinite package) |
+
+The main `hnix` package instantiates these signatures via Cabal mixins, selecting the concrete implementations.
 
 
 ## Current status
