@@ -139,8 +139,9 @@ unsafeDiscardOutputDependencyNix nv =
     toValue $ mkNixString (HS.map discard nc) ns
  where
   discard :: StringContext -> StringContext
-  discard (StringContext AllOutputs a) = StringContext DirectPath a
-  discard x                            = x
+  discard sc
+    | isAllOutputs (getStringContextFlavor sc) = mkStringContext mkDirectPath (getStringContextPath sc)
+    | otherwise = sc
 
 addDrvOutputDependenciesNix
   :: forall e t f m
@@ -174,7 +175,7 @@ addDrvOutputDependenciesNix nv =
     case getStringContextFlavor sc of
       DirectPath -> do
         ensureDrv
-        toValue $ mkNixString (one $ StringContext AllOutputs path) contents
+        toValue $ mkNixString (one $ mkStringContext mkAllOutputs path) contents
       AllOutputs ->
         pure $ NVStr ns
       DerivationOutput out ->
@@ -213,7 +214,7 @@ outputOfNix nvDrvRef nvOutputName =
               "builtins.outputOf: string context must have exactly one element, but has "
               <> show (HS.size ctx)
 
-    toValue $ mkNixString (one $ StringContext (DerivationOutput outputName) drvPath) contents
+    toValue $ mkNixString (one $ mkStringContext (mkDerivationOutput outputName) drvPath) contents
  where
   ensureDrvText :: Text -> m ()
   ensureDrvText p =

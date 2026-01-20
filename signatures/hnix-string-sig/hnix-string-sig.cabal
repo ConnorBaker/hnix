@@ -1,0 +1,28 @@
+cabal-version:  3.0
+name:           hnix-string-sig
+version:        0.17.0
+synopsis:       Backpack signature for HNix string operations
+description:    Defines the abstract interface for Nix strings with context tracking.
+                Implementations can use Text, ByteString, or other data structures.
+                .
+                Nix strings carry "context" - information about which store paths
+                or derivations they reference. This context propagates through
+                string operations to ensure proper dependency tracking.
+category:       System, Data, Nix
+license:        BSD-3-Clause
+license-file:   ../../License
+build-type:     Simple
+
+library
+  default-language: Haskell2010
+  signatures:
+    Nix.String.Sig
+  build-depends:
+      base >= 4.12 && < 5
+    , deepseq >= 1.4.3
+    , hashable >= 1.3.0
+    , hnix-types
+    , text >= 1.2
+    , unordered-containers >= 0.2.14
+  ghc-options:
+    -Wall

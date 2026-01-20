@@ -15,12 +15,14 @@ packages:
   ./hnix-types
   ./signatures/hnix-attrset-sig
   ./signatures/hnix-list-sig
-  ./signatures/hnix-value-protocol-sig
+  ./signatures/hnix-string-sig
+  ./hnix-builtins-list
+  ./hnix-builtins-attrset
   ./implementations/hnix-attrset-hashmap
   ./implementations/hnix-list-vector
+  ./implementations/hnix-string-text
   ./hnix-core
   ./hnix-value-core
-  ./hnix-instantiated
   -- hnix-store packages
   ./hnix-store/hnix-store-core
   ./hnix-store/hnix-store-db

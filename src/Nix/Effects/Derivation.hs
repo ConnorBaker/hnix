@@ -683,7 +683,7 @@ defaultDerivationStrict val = do
     let
       outputsWithContext =
         Map.mapWithKey
-          (\out (mkVarName -> path) -> mkNixStringWithSingletonContext (StringContext (DerivationOutput out) drvPath) path)
+          (\out (mkVarName -> path) -> mkNixStringWithSingletonContext (mkStringContext (mkDerivationOutput out) drvPath) path)
           (outputs drv')
       drvPathWithContext = mkNixStrAllOutputs drvPath
       attrSet = NVStr <$> HM.insert "drvPath" drvPathWithContext (Map.foldrWithKey HM.insert HM.empty outputsWithContext)
@@ -717,8 +717,10 @@ defaultDerivationStrict val = do
     toStorePaths = foldl (flip addToInputs) mempty
 
     addToInputs :: Bifunctor p => StringContext -> p (Set Text) (Map Text [Text])  -> p (Set Text) (Map Text [Text])
-    addToInputs (StringContext kind (varNameText -> path)) =
-      case kind of
+    addToInputs sc =
+      let kind = getStringContextFlavor sc
+          path = varNameText (getStringContextPath sc)
+      in case kind of
         DirectPath -> first $ Set.insert path
         DerivationOutput o -> second $ Map.insertWith (<>) path $ one o
         AllOutputs ->

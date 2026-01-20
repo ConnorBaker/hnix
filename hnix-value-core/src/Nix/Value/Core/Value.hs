@@ -81,6 +81,8 @@ module Nix.Value.Core.Value
   , _NVClosureF
   , _NVBuiltinF
   , key
+    -- * Free monad utility
+  , free
   ) where
 
 import           Relude                  hiding ( force )
@@ -849,3 +851,14 @@ key k = nValue . traverse . _NVSetF . _2 . hashAt k
     hashAt k' f m = f (A.lookup k' m) <&> \case
       Nothing -> A.delete k' m
       Just v' -> A.insert k' v' m
+
+
+-- * Free monad utility
+
+-- | Lambda analog of @maybe@ or @either@ for Free monad.
+free :: (a -> b) -> (f (Free f a) -> b) -> Free f a -> b
+free fP fF fr =
+  case fr of
+    Pure a -> fP a
+    Free fa -> fF fa
+{-# INLINABLE free #-}

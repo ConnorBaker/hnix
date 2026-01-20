@@ -1,12 +1,17 @@
 cabal-version:  3.0
-name:           hnix-list-vector
+name:           hnix-string-text
 version:        0.17.0
-synopsis:       Vector implementation for HNix NixList signature
-description:    Provides a Vector-backed implementation of the NixList signature.
-                Offers O(1) length and indexing, ideal for Nix list operations.
+synopsis:       Text implementation for HNix NixString signature
+description:    Provides a Text-backed implementation of the NixString signature.
+                Uses Data.Text for string content and HashSet for context tracking.
                 .
-                List builtins are provided by the separate hnix-builtins-list
-                package which uses Backpack signatures for full monomorphization.
+                The package has a two-tier structure:
+                .
+                * Internal library (hnix-string-text-internal): Core NixString
+                  implementation with no unfilled signatures.
+                .
+                * Public library: Re-exports internal library plus NixLikeContext
+                  which requires Nix.AttrSet.Sig for Nix-compatible context handling.
 category:       System, Data, Nix
 license:        BSD-3-Clause
 license-file:   ../../License
@@ -17,10 +22,9 @@ flag strict
   manual: True
   default: True
 
--- Internal library with ONLY the Vector implementation.
--- No unfilled signatures, no hnix-value-core dependency.
--- This breaks the Backpack cycle.
-library hnix-list-vector-internal
+-- Internal library: no unfilled signatures.
+-- Contains core NixString + StringContext + WithStringContextT.
+library hnix-string-text-internal
   default-language: Haskell2010
   default-extensions:
       NoImplicitPrelude
@@ -39,23 +43,23 @@ library hnix-list-vector-internal
     default-extensions:
       Strict
   exposed-modules:
-    Nix.List.Vector
+    Nix.String.Text
+    Nix.String.Text.Context
   hs-source-dirs:
     src
   build-depends:
       base >= 4.12 && < 5
     , deepseq >= 1.4.3
     , hashable >= 1.3.0
+    , hnix-types
+    , mtl >= 2.2.2
     , relude >= 1.0.0
-    , semialign >= 1.2
-    , these >= 1.1
-    , vector >= 0.12.0
+    , text >= 1.2
+    , unordered-containers >= 0.2.14
   ghc-options:
     -Wall
 
--- Public library providing the Vector implementation.
--- Has unfilled Nix.AttrSet.Sig signature (filled by the final consumer).
--- The list builtins are now in a separate package: hnix-builtins-list
+-- Public library: re-exports internal + NixLike (needs AttrSet.Sig).
 library
   default-language: Haskell2010
   default-extensions:
@@ -78,23 +82,24 @@ library
   signatures:
     Nix.AttrSet.Sig
   mixins:
-      -- Bring internal library's module into scope
-      hnix-list-vector-internal
+    -- Bring internal library's modules into scope
+    hnix-string-text-internal
   reexported-modules:
-    Nix.List.Vector
+    Nix.String.Text
+    , Nix.String.Text.Context
+  exposed-modules:
+    Nix.String.Text.NixLike
   hs-source-dirs:
-    src
+    src-public
   build-depends:
       base >= 4.12 && < 5
     , deepseq >= 1.4.3
     , hashable >= 1.3.0
     , hnix-attrset-sig
-    , hnix-list-vector-internal
+    , hnix-string-text-internal
     , hnix-types
     , relude >= 1.0.0
-    , semialign >= 1.2
     , text >= 1.2
-    , these >= 1.1
-    , vector >= 0.12.0
+    , unordered-containers >= 0.2.14
   ghc-options:
     -Wall

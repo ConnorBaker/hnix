@@ -50,6 +50,7 @@ library
   signatures:
     Nix.AttrSet.Sig
     Nix.List.Sig
+    Nix.String.Sig
   exposed-modules:
     Nix.Value.Core.Thunk
     Nix.Value.Core.Thunk.Basic
@@ -57,6 +58,9 @@ library
     Nix.Value.Core.Monad
     Nix.Value.Core.String
     Nix.Value.Core.Value
+    Nix.Value.Core.Interned
+    Nix.Value.Core.Equal
+    Nix.Value.Core.Protocol
   hs-source-dirs:
     src
   build-depends:
@@ -70,14 +74,18 @@ library
     , hnix-types
     , hnix-attrset-sig
     , hnix-list-sig
+    , hnix-string-sig
     , hnix-core
     , lens-family >= 1.2.2
     , lens-family-core >= 1.2.2
     , lens-family-th >= 0.5.0.2
     , mtl >= 2.2.2
     , ref-tf >= 0.5
+    , reflection >= 2.1.6
     , relude >= 1.0.0
+    , semialign >= 1.2
     , text >= 1.2.3
+    , these >= 1.1
     , transformers >= 0.5.5
     , unordered-containers >= 0.2.14
   ghc-options:

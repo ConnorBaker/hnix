@@ -84,7 +84,7 @@ toJSON = \case
   NVPath p ->
     do
       fp <- lift $ coerce <$> addPath p
-      addSingletonStringContext $ StringContext DirectPath $ fromString fp
+      addSingletonStringContext $ mkStringContext mkDirectPath $ fromString fp
       pure $ A.toJSON fp
   v -> lift $ throwError $ CoercionToJson v
 
