@@ -400,6 +400,7 @@ library
     Nix.Utils
     Nix.Atoms
     Nix.Builtins
+    Nix.Builtins.AttrSet
     Nix.Builtins.Internal
     Nix.Builtins.List
     Nix.Builtins.String
