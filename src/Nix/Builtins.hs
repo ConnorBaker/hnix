@@ -55,6 +55,7 @@ import           Nix.Parser
 import           Nix.Scope
 import           Nix.String
 import           Nix.Value
+import           Nix.Value.Interned             ( internedTrue, internedFalse, internedNull )
 import           Nix.Value.Monad
 
 -- This is a big module. There is recursive reuse:
@@ -212,7 +213,7 @@ builtinsList =
     , add2 Normal   "elem"             elemNix
     , add2 Normal   "elemAt"           elemAtNix
     , add  Normal   "exec"             execNix
-    , add0 Normal   "false"            pure internedFalse
+    , add0 Normal   "false"            (pure internedFalse)
     , add  Normal   "fetchGit"         fetchGit
     , add  Normal   "fetchTree"        fetchTree
     --, add  Normal   "fetchMercurial"   fetchMercurial
@@ -252,7 +253,7 @@ builtinsList =
     , add2 Normal   "match"            matchNix
     , add2 Normal   "mul"              mulNix
     , add0 Normal   "nixPath"          nixPathNix
-    , add0 Normal   "null"             pure internedNull
+    , add0 Normal   "null"             (pure internedNull)
     , add2 Normal   "outputOf"         outputOfNix
     , add  Normal   "parseDrvName"     parseDrvNameNix
     , add2 Normal   "partition"        partitionNix
@@ -277,7 +278,7 @@ builtinsList =
     , add  Normal   "toPath"           toPathNix -- Deprecated in Nix: https://github.com/NixOS/nix/pull/2524
     , add  Normal   "toXML"            toXMLNix
     , add2 Normal   "traceVerbose"     traceVerboseNix
-    , add0 Normal   "true"             pure internedTrue
+    , add0 Normal   "true"             (pure internedTrue)
     , add  Normal   "tryEval"          tryEvalNix
     , add  Normal   "typeOf"           typeOfNix
     , add  Normal   "unsafeDiscardOutputDependency" unsafeDiscardOutputDependencyNix

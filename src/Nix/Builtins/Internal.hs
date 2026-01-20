@@ -77,6 +77,7 @@ import           Nix.Frames
 import           Nix.String
 import           Nix.Scope
 import           Nix.Value
+import           Nix.Value.Interned             ( internedBool, internedNull )
 import           Nix.Value.Monad
 
 -- * Internal types

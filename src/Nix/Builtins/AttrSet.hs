@@ -40,6 +40,7 @@ import           Nix.Expr.Types                 ( AttrSet, mkVarName, emptyPosit
 import           Nix.Frames
 import           Nix.String
 import           Nix.Value
+import           Nix.Value.Interned             ( internedBool, internedFalse, internedEmptyList, internedEmptySet )
 import           Nix.Value.Monad
 
 

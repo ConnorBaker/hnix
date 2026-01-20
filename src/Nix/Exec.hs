@@ -150,6 +150,26 @@ mkNVBinaryOpWithProvenance
 mkNVBinaryOpWithProvenance scope span op lval rval =
   addProvenance (Provenance scope $ NBinaryAnnF span op lval rval)
 
+mkNVListWithProvenance
+  :: MonadCited t f m
+  => Scopes m (NValue t f m)
+  -> SrcSpan
+  -> [NValue t f m]
+  -> NValue t f m
+mkNVListWithProvenance scope span elems =
+  addProvenance (Provenance scope $ NListAnnF span (pure <$> elems)) $ NVList (L.nlFromList elems)
+
+mkNVSetWithProvenance
+  :: MonadCited t f m
+  => Scopes m (NValue t f m)
+  -> SrcSpan
+  -> PositionSet
+  -> AttrSet (NValue t f m)
+  -> NValue t f m
+mkNVSetWithProvenance scope span posSet attrs =
+  -- For provenance, we use an empty binding list since the actual bindings were already processed
+  addProvenance (Provenance scope $ NSetAnnF span NonRecursive []) $ NVSet posSet attrs
+
 type MonadCitedThunks t f m =
   ( MonadThunk t m (NValue t f m)
   , MonadDataErrorContext t f m
@@ -288,7 +308,7 @@ instance (MonadNix e t f m, HasProvCfg (CtxCfg e)) => MonadEval (NValue t f m) m
       ns <- assembleStringWithCoercion (stringParts str)
       withProvCtx
         (\scope span -> pure $ mkNVStrWithProvenance scope span ns)
-        (pure $ NVStr ns)
+        (evalStr ns)
    where
     assembleStringWithCoercion :: [Antiquoted Text (m (NValue t f m))] -> m NixString
     assembleStringWithCoercion parts = fold <$> traverse coercePart parts
@@ -394,6 +414,39 @@ instance (MonadNix e t f m, HasProvCfg (CtxCfg e)) => MonadEval (NValue t f m) m
       (\scope span -> pure $ mkNVClosureWithProvenance scope span (void p) closureFunc)
       (pure $ NVClosure (void p) closureFunc)
 
+  -- | Evaluate a list literal. Returns interned empty list for [] when
+  -- provenance is disabled.
+  evalList elems =
+    case elems of
+      [] -> withProvCtx
+        (\scope span -> pure $ mkNVListWithProvenance scope span [])
+        (pure internedEmptyList)
+      _ -> withProvCtx
+        (\scope span -> pure $ mkNVListWithProvenance scope span elems)
+        (pure $ NVList $ L.nlFromList elems)
+
+  -- | Evaluate a set literal. Returns interned empty set for {} when
+  -- provenance is disabled.
+  evalSet attrs posSet =
+    if A.null attrs
+      then withProvCtx
+        (\scope span -> pure $ mkNVSetWithProvenance scope span mempty mempty)
+        (pure internedEmptySet)
+      else withProvCtx
+        (\scope span -> pure $ mkNVSetWithProvenance scope span posSet attrs)
+        (pure $ NVSet posSet attrs)
+
+  -- | Evaluate a NixString result. Returns interned empty string for ""
+  -- when provenance is disabled.
+  evalStr ns =
+    if Text.null (ignoreContext ns) && not (hasContext ns)
+      then withProvCtx
+        (\scope span -> pure $ mkNVStrWithProvenance scope span ns)
+        (pure internedEmptyString)
+      else withProvCtx
+        (\scope span -> pure $ mkNVStrWithProvenance scope span ns)
+        (pure $ NVStr ns)
+
   evalError = throwError
 
 infixl 1 `callFunc`
@@ -447,7 +500,7 @@ execUnaryOp' op arg =
         -- Use interned boolean when provenance is disabled
         (NNot, NBool  b) -> withProvCtx
           (\scope span -> pure $ mkNVUnaryOpWithProvenance scope span op (pure arg) $ NVConstant $ NBool (not b))
-          (askInternedBool (not b))
+          (pure (internedBool (not b)))
         _seq ->
           nverr @e @t @f $ ErrorCall $ "unsupported argument type for unary operator " <> show _seq
     _x ->
@@ -541,7 +594,7 @@ execBinaryOpForced' op lval rval =
           -- Fast paths: avoid allocation when one or both lists are empty
           | L.nlNull ls && L.nlNull rs -> withProvCtx
               (\scope span -> pure $ mkNVBinaryOpWithProvenance scope span op (pure lval) (pure rval) $ NVList L.nlEmpty)
-              pure internedEmptyList
+              (pure internedEmptyList)
           | L.nlNull ls -> wrapResult rval
           | L.nlNull rs -> wrapResult lval
           | otherwise -> wrapResult $ NVList $ ls <> rs
@@ -553,7 +606,7 @@ execBinaryOpForced' op lval rval =
           -- Fast paths: avoid allocation when one or both sets are empty
           | A.null ls && A.null rs -> withProvCtx
               (\scope span -> pure $ mkNVBinaryOpWithProvenance scope span op (pure lval) (pure rval) $ NVSet emptyPositionSet mempty)
-              pure internedEmptySet
+              (pure internedEmptySet)
           | A.null ls -> wrapResult rval
           | A.null rs -> wrapResult lval
           | otherwise  -> wrapResult $ NVSet (rp <> lp) (rs <> ls)
@@ -601,7 +654,7 @@ execBinaryOpForced' op lval rval =
 
   -- | Create a boolean result, using interned booleans when provenance is disabled.
   mkBoolP :: Bool -> m (NValue t f m)
-  mkBoolP b = withProvCtx
+  mkBoolP b = withProvCtx @e
     (\scope span -> pure $ mkNVBinaryOpWithProvenance scope span op (pure lval) (pure rval) $ NVConstant $ NBool b)
     (pure (internedBool b))
 

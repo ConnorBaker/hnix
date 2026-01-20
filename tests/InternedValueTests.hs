@@ -21,6 +21,13 @@ import           System.Mem.StableName          ( makeStableName, eqStableName )
 
 import           Nix
 import           Nix.Standard
+import           Nix.Value.Interned             ( internedEmptyList
+                                                , internedEmptySet
+                                                , internedEmptyString
+                                                , internedTrue
+                                                , internedFalse
+                                                , internedNull
+                                                )
 import           Nix.Value.Monad                ( demand )
 
 import           Test.Tasty
@@ -113,222 +120,259 @@ assertPointerNotEqual expr getInterned desc = do
 
 tests :: TestTree
 tests = testGroup "Interned value pointer equality"
-  [ emptyListTests
-  , emptySetTests
-  , booleanTests
-  , nullTests
+  [ literalExpressionTests
+  , operationTests
   , sanityTests
   ]
 
+-- ============================================================================
+-- Literal expression tests - verify parsing/evaluating literals returns interned values
+-- ============================================================================
+
+-- | Tests for literal expressions that should return interned values.
+-- These verify that evaluating literal syntax ([], {}, "", true, false, null)
+-- returns the exact interned singleton values.
+literalExpressionTests :: TestTree
+literalExpressionTests = testGroup "Literal expressions"
+  [ testCase "empty list literal []" $
+      assertPointerEqual
+        "[]"
+        (pure internedEmptyList)
+        "[] literal"
+
+  , testCase "empty set literal {}" $
+      assertPointerEqual
+        "{}"
+        (pure internedEmptySet)
+        "{} literal"
+
+  , testCase "empty string literal \"\"" $
+      assertPointerEqual
+        "\"\""
+        (pure internedEmptyString)
+        "\"\" literal"
+
+  , testCase "literal true" $
+      assertPointerEqual
+        "true"
+        (pure internedTrue)
+        "true literal"
+
+  , testCase "literal false" $
+      assertPointerEqual
+        "false"
+        (pure internedFalse)
+        "false literal"
+
+  , testCase "literal null" $
+      assertPointerEqual
+        "null"
+        (pure internedNull)
+        "null literal"
+  ]
+
+-- ============================================================================
+-- Operation tests - verify builtins/operations return interned values
+-- ============================================================================
+
+-- | Tests for operations that should return interned values.
+-- These verify that builtins and operations that produce empty collections
+-- or boolean/null results return the interned singleton values.
+operationTests :: TestTree
+operationTests = testGroup "Operations returning interned values"
+  [ emptyListOperationTests
+  , emptySetOperationTests
+  , booleanOperationTests
+  ]
+
 -- | Tests for operations that should return the interned empty list.
-emptyListTests :: TestTree
-emptyListTests = testGroup "Empty list fast paths"
+emptyListOperationTests :: TestTree
+emptyListOperationTests = testGroup "Empty list operations"
   [ testCase "builtins.map over empty list" $
       assertPointerEqual
         "builtins.map (x: x) []"
-        askInternedEmptyList
+        (pure internedEmptyList)
         "map over []"
 
   , testCase "builtins.filter over empty list" $
       assertPointerEqual
         "builtins.filter (x: true) []"
-        askInternedEmptyList
+        (pure internedEmptyList)
         "filter over []"
 
   , testCase "builtins.filter returns empty (all filtered)" $
       assertPointerEqual
         "builtins.filter (x: false) [1 2 3]"
-        askInternedEmptyList
+        (pure internedEmptyList)
         "filter returns []"
 
   , testCase "builtins.tail of singleton" $
       assertPointerEqual
         "builtins.tail [1]"
-        askInternedEmptyList
+        (pure internedEmptyList)
         "tail of [1]"
 
   , testCase "builtins.sort of empty list" $
       assertPointerEqual
         "builtins.sort (a: b: a < b) []"
-        askInternedEmptyList
+        (pure internedEmptyList)
         "sort of []"
 
   , testCase "builtins.concatLists of empty list" $
       assertPointerEqual
         "builtins.concatLists []"
-        askInternedEmptyList
+        (pure internedEmptyList)
         "concatLists of []"
 
   , testCase "builtins.concatLists result is empty" $
       assertPointerEqual
         "builtins.concatLists [[] []]"
-        askInternedEmptyList
+        (pure internedEmptyList)
         "concatLists of [[] []]"
 
   , testCase "builtins.concatMap over empty list" $
       assertPointerEqual
         "builtins.concatMap (x: [x]) []"
-        askInternedEmptyList
+        (pure internedEmptyList)
         "concatMap over []"
 
   , testCase "builtins.genList with n=0" $
       assertPointerEqual
         "builtins.genList (x: x) 0"
-        askInternedEmptyList
+        (pure internedEmptyList)
         "genList with 0"
 
   , testCase "builtins.catAttrs over empty list" $
       assertPointerEqual
         "builtins.catAttrs \"x\" []"
-        askInternedEmptyList
+        (pure internedEmptyList)
         "catAttrs over []"
 
   , testCase "builtins.catAttrs returns empty" $
       assertPointerEqual
         "builtins.catAttrs \"x\" [{ y = 1; } { z = 2; }]"
-        askInternedEmptyList
+        (pure internedEmptyList)
         "catAttrs returns []"
 
   , testCase "builtins.partition empty input - right list" $
       assertPointerEqual
         "(builtins.partition (x: true) []).wrong"
-        askInternedEmptyList
+        (pure internedEmptyList)
         "partition [] .wrong"
 
   , testCase "builtins.partition empty input - left list" $
       -- When input is empty, both .right and .wrong should be interned empty
       assertPointerEqual
         "(builtins.partition (x: true) []).right"
-        askInternedEmptyList
+        (pure internedEmptyList)
         "partition [] .right"
   ]
 
 -- | Tests for operations that should return the interned empty set.
-emptySetTests :: TestTree
-emptySetTests = testGroup "Empty set fast paths"
+emptySetOperationTests :: TestTree
+emptySetOperationTests = testGroup "Empty set operations"
   [ testCase "builtins.mapAttrs over empty set" $
       assertPointerEqual
         "builtins.mapAttrs (n: v: v) {}"
-        askInternedEmptySet
+        (pure internedEmptySet)
         "mapAttrs over {}"
 
   , testCase "builtins.listToAttrs of empty list" $
       assertPointerEqual
         "builtins.listToAttrs []"
-        askInternedEmptySet
+        (pure internedEmptySet)
         "listToAttrs of []"
 
   , testCase "builtins.groupBy over empty list" $
       assertPointerEqual
         "builtins.groupBy (x: x) []"
-        askInternedEmptySet
+        (pure internedEmptySet)
         "groupBy over []"
 
   , testCase "builtins.intersectAttrs with empty first arg" $
       assertPointerEqual
         "builtins.intersectAttrs {} { x = 1; }"
-        askInternedEmptySet
+        (pure internedEmptySet)
         "intersectAttrs {} {...}"
 
   , testCase "builtins.intersectAttrs with empty second arg" $
       assertPointerEqual
         "builtins.intersectAttrs { x = 1; } {}"
-        askInternedEmptySet
+        (pure internedEmptySet)
         "intersectAttrs {...} {}"
 
   , testCase "builtins.intersectAttrs no common keys" $
       assertPointerEqual
         "builtins.intersectAttrs { a = 1; } { b = 2; }"
-        askInternedEmptySet
+        (pure internedEmptySet)
         "intersectAttrs disjoint"
 
   , testCase "builtins.zipAttrsWith over empty list" $
       assertPointerEqual
         "builtins.zipAttrsWith (n: vs: vs) []"
-        askInternedEmptySet
+        (pure internedEmptySet)
         "zipAttrsWith over []"
   ]
 
 -- | Tests for boolean operations that should return interned true/false.
-booleanTests :: TestTree
-booleanTests = testGroup "Boolean fast paths"
-  [ testCase "literal true" $
-      assertPointerEqual
-        "true"
-        askInternedTrue
-        "true literal"
-
-  , testCase "literal false" $
-      assertPointerEqual
-        "false"
-        askInternedFalse
-        "false literal"
-
-  , testCase "builtins.elem found" $
+booleanOperationTests :: TestTree
+booleanOperationTests = testGroup "Boolean operations"
+  [ testCase "builtins.elem found" $
       assertPointerEqual
         "builtins.elem 2 [1 2 3]"
-        askInternedTrue
+        (pure internedTrue)
         "elem found"
 
   , testCase "builtins.elem not found" $
       assertPointerEqual
         "builtins.elem 4 [1 2 3]"
-        askInternedFalse
+        (pure internedFalse)
         "elem not found"
 
   , testCase "builtins.any true" $
       assertPointerEqual
         "builtins.any (x: x > 2) [1 2 3]"
-        askInternedTrue
+        (pure internedTrue)
         "any true"
 
   , testCase "builtins.any false" $
       assertPointerEqual
         "builtins.any (x: x > 10) [1 2 3]"
-        askInternedFalse
+        (pure internedFalse)
         "any false"
 
   , testCase "builtins.all true" $
       assertPointerEqual
         "builtins.all (x: x < 10) [1 2 3]"
-        askInternedTrue
+        (pure internedTrue)
         "all true"
 
   , testCase "builtins.all false" $
       assertPointerEqual
         "builtins.all (x: x > 1) [1 2 3]"
-        askInternedFalse
+        (pure internedFalse)
         "all false"
   ]
 
 -- | Tests for null operations.
-nullTests :: TestTree
-nullTests = testGroup "Null fast paths"
-  [ testCase "literal null" $
-      assertPointerEqual
-        "null"
-        askInternedNull
-        "null literal"
-  ]
-
 -- | Sanity checks that non-empty/non-singleton values are NOT pointer-equal.
 sanityTests :: TestTree
 sanityTests = testGroup "Sanity checks (should NOT be pointer-equal)"
   [ testCase "[1] is not empty list" $
       assertPointerNotEqual
         "[1]"
-        askInternedEmptyList
+        (pure internedEmptyList)
         "[1]"
 
   , testCase "{ x = 1; } is not empty set" $
       assertPointerNotEqual
         "{ x = 1; }"
-        askInternedEmptySet
+        (pure internedEmptySet)
         "{ x = 1; }"
 
   , testCase "1 is not interned null" $
       assertPointerNotEqual
         "1"
-        askInternedNull
+        (pure internedNull)
         "1"
   ]

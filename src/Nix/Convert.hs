@@ -13,7 +13,31 @@
 --   - Several types of Nix wrappers
 --   - Whether to be shallow or deep while unwrapping
 
-module Nix.Convert where
+module Nix.Convert
+  ( -- * Core type classes
+    FromValue(..)
+  , ToValue(..)
+    -- * Interned value helpers
+    -- | These helpers use interned values for common cases.
+    -- Use these at call sites where 'GivenInterned' is available.
+  , toValueBoolInterned
+  , toValueUnitInterned
+  , toValueListInterned
+  , toValueNixListInterned
+  , toValueAttrSetInterned
+  , toValueAttrSetWithPosInterned
+  , toValueNixStringInterned
+    -- * Conversion utilities
+  , Deeper(..)
+  , CoerceDeeperToNValue
+  , CoerceDeeperToNValue'
+  , Convertible
+  , inHask
+  , inHaskM
+  , inHaskMay
+  , traverseFromValue
+  , traverseToValue
+  ) where
 
 import           Nix.Prelude
 import           Control.Monad.Free
@@ -27,9 +51,19 @@ import           Nix.Frames
 import           Nix.String
 import           Nix.Value
 import           Nix.Value.Monad
+import           Nix.Value.Interned             ( GivenInterned
+                                                , internedTrue
+                                                , internedFalse
+                                                , internedNull
+                                                , internedEmptyList
+                                                , internedEmptySet
+                                                , internedEmptyString
+                                                , internedBool
+                                                )
 import           Nix.Thunk                      ( MonadThunk(force) )
 import           Nix.Core.List                  ( NixList )
 import qualified Nix.Core.List                 as L
+import qualified Data.Text                     as Text
 
 newtype Deeper a = Deeper a
   deriving (Functor, Foldable, Traversable)
@@ -530,3 +564,71 @@ instance Convertible e t f m => ToValue () m (NExprF (NValue t f m)) where
 
 instance Convertible e t f m => ToValue Bool m (NExprF (NValue t f m)) where
   toValue = pure . NConstant . NBool
+
+
+-- * Interned value helpers
+--
+-- These helpers use interned values for common cases (empty collections, booleans, null).
+-- Use these at call sites where 'GivenInterned' constraint is available.
+
+-- | Convert a Bool to NValue using interned true/false values.
+toValueBoolInterned :: GivenInterned t f m => Bool -> NValue t f m
+toValueBoolInterned = internedBool
+{-# INLINE toValueBoolInterned #-}
+
+-- | Convert () to NValue using interned null.
+toValueUnitInterned :: GivenInterned t f m => () -> NValue t f m
+toValueUnitInterned () = internedNull
+{-# INLINE toValueUnitInterned #-}
+
+-- | Convert a list to NValue, using interned empty list when empty.
+toValueListInterned
+  :: (GivenInterned t f m, Convertible e t f m)
+  => [NValue t f m]
+  -> NValue t f m
+toValueListInterned lst =
+  case lst of
+    [] -> internedEmptyList
+    _  -> NVList (L.nlFromList lst)
+{-# INLINE toValueListInterned #-}
+
+-- | Convert a NixList to NValue, using interned empty list when empty.
+toValueNixListInterned
+  :: (GivenInterned t f m, NVConstraint f)
+  => NixList (NValue t f m)
+  -> NValue t f m
+toValueNixListInterned lst
+  | L.nlNull lst = internedEmptyList
+  | otherwise = NVList lst
+{-# INLINE toValueNixListInterned #-}
+
+-- | Convert an AttrSet to NValue, using interned empty set when empty.
+toValueAttrSetInterned
+  :: (GivenInterned t f m, NVConstraint f)
+  => AttrSet (NValue t f m)
+  -> NValue t f m
+toValueAttrSetInterned attrs
+  | A.null attrs = internedEmptySet
+  | otherwise = NVSet mempty attrs
+{-# INLINE toValueAttrSetInterned #-}
+
+-- | Convert an AttrSet with positions to NValue, using interned empty set when empty.
+toValueAttrSetWithPosInterned
+  :: (GivenInterned t f m, NVConstraint f)
+  => AttrSet (NValue t f m)
+  -> PositionSet
+  -> NValue t f m
+toValueAttrSetWithPosInterned attrs pos
+  | A.null attrs = internedEmptySet
+  | otherwise = NVSet pos attrs
+{-# INLINE toValueAttrSetWithPosInterned #-}
+
+-- | Convert a NixString to NValue, using interned empty string when empty.
+toValueNixStringInterned
+  :: (GivenInterned t f m, NVConstraint f)
+  => NixString
+  -> NValue t f m
+toValueNixStringInterned ns
+  | Text.null (ignoreContext ns) && not (hasContext ns) = internedEmptyString
+  | otherwise = NVStr ns
+{-# INLINE toValueNixStringInterned #-}

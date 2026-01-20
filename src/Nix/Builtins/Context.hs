@@ -33,6 +33,7 @@ import           Nix.Expr.Types
 import           Nix.Frames
 import           Nix.String
 import           Nix.Value
+import           Nix.Value.Interned             ( internedBool )
 import           Nix.Value.Monad
 
 

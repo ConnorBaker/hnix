@@ -89,6 +89,7 @@ import           Nix.Scope
 import           Nix.String
 import           Nix.String.Coerce
 import           Nix.Value
+import           Nix.Value.Interned             ( internedBool, internedNull )
 import           Nix.Value.Monad
 import           Nix.XML
 import qualified Toml
@@ -314,7 +315,7 @@ pathExistsNix nvpath =
       if isStorePath opts path
         then storePathExists path
         else doesPathExist path
-    pure . internedBool exists
+    pure $ internedBool exists
 
 readFileNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 readFileNix nvpath = do

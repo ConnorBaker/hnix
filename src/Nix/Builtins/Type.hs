@@ -38,6 +38,7 @@ import           Nix.Expr.Types                 ( AttrSet, Params(..) )
 import           Nix.Frames
 import           Nix.String
 import           Nix.Value
+import           Nix.Value.Interned             ( internedTrue, internedFalse )
 import           Nix.Value.Monad
 
 -- * Type checking builtins

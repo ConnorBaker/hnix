@@ -377,6 +377,18 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
   evalApp = (fmap snd .) . lintApp (join NApp mempty)
   evalAbs params _ = mkSymbolic1 (TClosure $ void params)
 
+  -- | Create a symbolic list from its elements.
+  -- Uses the first element as the element type, or everyPossible for empty lists.
+  evalList elems = do
+    elemType <- case elems of
+      []    -> everyPossible
+      (x:_) -> pure x
+    mkSymbolic1 $ TList elemType
+  -- | Create a symbolic set from its attributes.
+  evalSet attrs _posSet = mkSymbolic1 $ TSet $ Just attrs
+  -- | Return a symbolic string type.
+  evalStr _ = mkSymbolic1 TStr
+
   evalError = throwError
 
 lintBinaryOp

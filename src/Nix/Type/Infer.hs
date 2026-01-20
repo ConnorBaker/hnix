@@ -512,6 +512,19 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
         (cs <> [ EqConst t' (fromJust (A.lookup x tys)) | x <- names, t' <- Assumption.lookup x as ])
         (ty :~> t)
 
+  -- | Infer the type of a list literal from its elements.
+  evalList elems = do
+    elemTypes <- traverse (pure . inferredType) elems
+    pure $ inferred $ TList elemTypes
+
+  -- | Infer the type of a set literal from its attributes.
+  evalSet attrs _posSet = do
+    let attrTypes = fmap inferredType attrs
+    pure $ inferred $ TSet Closed attrTypes
+
+  -- | Return the string type for a NixString result.
+  evalStr _ = pure $ inferred typeString
+
   evalError = throwError . EvaluationError
 
 -- * class @FreeTypeVars@

@@ -53,6 +53,7 @@ import           Nix.Expr.Types                 ( AttrSet, mkVarName, emptyPosit
 import           Nix.Frames
 import           Nix.Value
 import           Nix.Value.Equal                ( valueEqM, checkComparable )
+import           Nix.Value.Interned             ( internedEmptyList, internedEmptySet, internedBool, internedFalse )
 import           Nix.Value.Monad
 
 
@@ -125,7 +126,7 @@ anyNix f nvList = do
       if r then pure True else acc)
     (pure False)
     vec
-  pure . internedBool result
+  pure $ internedBool result
 
 -- | Short-circuit evaluation: returns False as soon as any element fails the predicate.
 -- Uses L.nlFoldr with lazy accumulator to avoid evaluating remaining elements.
@@ -144,7 +145,7 @@ allNix f nvList = do
       if r then acc else pure False)
     (pure True)
     vec
-  pure . internedBool result
+  pure $ internedBool result
 
 -- | Check if an element is in a list.
 -- Returns interned false immediately for empty list (fast path).

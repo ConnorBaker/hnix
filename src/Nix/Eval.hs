@@ -54,21 +54,19 @@ class (Show v, Monad m) => MonadEval v m where
                     -> m (a, v)
                     )
                   -> m v
-{-
-  evalSelect     :: v -> NonEmpty Text -> Maybe (m v) -> m v
-  evalHasAttr    :: v -> NonEmpty Text -> m v
 
-  -- | This and the following methods are intended to allow things like
-  --   adding provenance information.
-  evalListElem   :: [m v] -> Int -> m v -> m v
-  evalList       :: [v] -> m v
-  evalSetElem    :: AttrSet (m v) -> Text -> m v -> m v
-  evalSet        :: AttrSet v -> PositionSet -> m v
-  evalRecSetElem :: AttrSet (m v) -> Text -> m v -> m v
-  evalRecSet     :: AttrSet v -> PositionSet -> m v
-  evalLetElem    :: Text -> m v -> m v
-  evalLet        :: m v -> m v
--}
+  -- | Evaluate a list literal. Allows implementations to return interned
+  -- empty list for @[]@ expressions.
+  evalList        :: [v] -> m v
+
+  -- | Evaluate a set literal. Allows implementations to return interned
+  -- empty set for @{}@ expressions.
+  evalSet         :: AttrSet v -> PositionSet -> m v
+
+  -- | Evaluate a NixString result (after assembly). Allows implementations
+  -- to return interned empty string for @""@ expressions.
+  evalStr         :: NixString -> m v
+
   evalError :: Exception s => s -> m a
 
 type MonadNixEval v m
@@ -151,13 +149,13 @@ eval (NHasAttr aset attr) =
 eval (NList l           ) =
   do
     scope <- askScopes
-    toValue =<< traverse (defer @v @m . withScopes @v scope) l
+    evalList =<< traverse (defer @v @m . withScopes @v scope) l
 
 eval (NSet r binds) =
   do
     -- Bindings are already desugared at the AST level (see Nix.Expr.Desugar)
-    attrSet <- evalBinds (r == Recursive) binds
-    toValue attrSet
+    (attrSet, posSet) <- evalBinds (r == Recursive) binds
+    evalSet attrSet posSet
 
 eval (NLet binds body    ) =
   do

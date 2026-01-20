@@ -67,6 +67,7 @@ import           Nix.Render                     ( readFile )
 import           Nix.String
 import           Nix.String.Coerce
 import           Nix.Value
+import           Nix.Value.Interned             ( internedNull )
 import           Nix.Value.Monad
 import           System.Nix.Base32             as Base32
 
