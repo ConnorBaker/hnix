@@ -68,8 +68,8 @@ lengthNix
   :: forall t f m . MonadListBuiltin t f m
   => NValue t f m
   -> m (NValue t f m)
-lengthNix nv = do
-  lst <- V.demandList "builtins.length" nv
+lengthNix list = do
+  lst <- V.demandList "builtins.length" list
   pure $ V.mkInt $ fromIntegral $ V.listLength lst
 
 -- | Get the first element of a list.
@@ -79,11 +79,11 @@ headNix
   :: forall t f m . MonadListBuiltin t f m
   => NValue t f m
   -> m (NValue t f m)
-headNix nv = do
-  lst <- V.demandList "builtins.head" nv
+headNix list = do
+  lst <- V.demandList "builtins.head" list
   case V.listHead lst of
     Nothing -> V.throwTypeError "builtins.head: empty list"
-    Just a  -> pure a
+    Just x  -> pure x
 
 -- | Get all elements after the first.
 --
@@ -92,13 +92,13 @@ tailNix
   :: forall t f m . MonadListBuiltin t f m
   => NValue t f m
   -> m (NValue t f m)
-tailNix nv = do
-  lst <- V.demandList "builtins.tail" nv
+tailNix list = do
+  lst <- V.demandList "builtins.tail" list
   case V.listTail lst of
     Nothing -> V.throwTypeError "builtins.tail: empty list"
-    Just t
-      | V.listNull t  -> pure V.internedEmptyList
-      | otherwise     -> pure $ V.mkList t
+    Just tl
+      | V.listNull tl -> pure V.internedEmptyList
+      | otherwise     -> pure $ V.mkList tl
 
 -- | Get the element at a given index.
 --
@@ -108,13 +108,13 @@ elemAtNix
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-elemAtNix xs n = do
-  i   <- V.demandInt "builtins.elemAt" n
-  lst <- V.demandList "builtins.elemAt" xs
-  case V.listElemAt lst (fromIntegral i) of
-    Nothing -> V.throwTypeError $ "builtins.elemAt: index " <> Text.pack (show i) <>
+elemAtNix list n = do
+  idx <- V.demandInt "builtins.elemAt" n
+  lst <- V.demandList "builtins.elemAt" list
+  case V.listElemAt lst (fromIntegral idx) of
+    Nothing -> V.throwTypeError $ "builtins.elemAt: index " <> Text.pack (show idx) <>
                                   " too large for list of length " <> Text.pack (show (V.listLength lst))
-    Just v' -> pure v'
+    Just x -> pure x
 
 -- * Predicates
 
@@ -124,15 +124,15 @@ anyNix
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-anyNix f nvList = do
-  lst <- V.demandList "builtins.any" nvList
+anyNix pred list = do
+  lst <- V.demandList "builtins.any" list
   if V.listNull lst
     then pure V.internedFalse
     else do
       -- Use foldr for short-circuit evaluation
       result <- foldr
         (\x acc -> do
-          b <- V.demandBool "builtins.any" =<< V.callFunc f x
+          b <- V.demandBool "builtins.any" =<< V.callFunc pred x
           if b then pure True else acc)
         (pure False)
         lst
@@ -144,14 +144,14 @@ allNix
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-allNix f nvList = do
-  lst <- V.demandList "builtins.all" nvList
+allNix pred list = do
+  lst <- V.demandList "builtins.all" list
   if V.listNull lst
     then pure V.internedTrue
     else do
       result <- foldr
         (\x acc -> do
-          b <- V.demandBool "builtins.all" =<< V.callFunc f x
+          b <- V.demandBool "builtins.all" =<< V.callFunc pred x
           if b then acc else pure False)
         (pure True)
         lst
@@ -163,22 +163,22 @@ elemNix
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-elemNix x nvList = do
-  vec <- V.demandList "builtins.elem" nvList
-  if V.listNull vec
+elemNix x xs = do
+  lst <- V.demandList "builtins.elem" xs
+  if V.listNull lst
     then pure V.internedFalse
     else do
-      result <- anyMVec (V.valueEq x) vec
+      result <- anyMVec (V.valueEq x) lst
       pure $ V.internedBool result
  where
   anyMVec :: (a -> m Bool) -> NixList a -> m Bool
-  anyMVec p v = go 0
+  anyMVec p vec = go 0
    where
-    n = V.listLength v
+    len = V.listLength vec
     go i
-      | i >= n    = pure False
+      | i >= len  = pure False
       | otherwise = do
-          ok <- p (V.listUnsafeElemAt v i)
+          ok <- p (V.listUnsafeElemAt vec i)
           if ok
             then pure True
             else go (i + 1)
@@ -191,8 +191,8 @@ mapNix
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-mapNix f nv = do
-  lst <- V.demandList "builtins.map" nv
+mapNix f list = do
+  lst <- V.demandList "builtins.map" list
   if V.listNull lst
     then pure V.internedEmptyList
     else do
@@ -205,18 +205,18 @@ filterNix
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-filterNix f nv = do
-  lst <- V.demandList "builtins.filter" nv
+filterNix pred list = do
+  lst <- V.demandList "builtins.filter" list
   if V.listNull lst
     then pure V.internedEmptyList
     else do
-      result <- V.listFilterM predicate lst
+      result <- V.listFilterM applyPred lst
       if V.listNull result
         then pure V.internedEmptyList
         else pure $ V.mkList result
  where
-  predicate :: NValue t f m -> m Bool
-  predicate x = V.demandBool "builtins.filter" =<< V.callFunc f x
+  applyPred :: NValue t f m -> m Bool
+  applyPred x = V.demandBool "builtins.filter" =<< V.callFunc pred x
 
 -- | Strict left fold over a list.
 foldl'Nix
@@ -225,13 +225,13 @@ foldl'Nix
   -> NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-foldl'Nix f z xs = do
-  lst <- V.demandList "builtins.foldl'" xs
-  V.listFoldM' go z lst
+foldl'Nix op init list = do
+  lst <- V.demandList "builtins.foldl'" list
+  V.listFoldM' go init lst
  where
-  go b a = do
-    f' <- V.callFunc f b
-    V.callFunc f' a
+  go acc x = do
+    op' <- V.callFunc op acc
+    V.callFunc op' x
 
 -- * Generation
 
@@ -241,8 +241,8 @@ genListNix
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-genListNix f nixN = do
-  n <- V.demandInt "builtins.genList" nixN
+genListNix generator len = do
+  n <- V.demandInt "builtins.genList" len
   if n < 0
     then V.throwTypeError $ "builtins.genList: expected a non-negative number, got " <> Text.pack (show n)
     else if n == 0
@@ -251,7 +251,7 @@ genListNix f nixN = do
         result <- V.listGenListM (fromIntegral n) genElement
         pure $ V.mkList result
  where
-  genElement i = V.defer $ V.callFunc f (V.mkInt $ fromIntegral i)
+  genElement i = V.defer $ V.callFunc generator (V.mkInt $ fromIntegral i)
 
 -- * Combining lists
 
@@ -260,13 +260,13 @@ concatListsNix
   :: forall t f m . MonadListBuiltin t f m
   => NValue t f m
   -> m (NValue t f m)
-concatListsNix nv = do
-  outerLst <- V.demandList "builtins.concatLists" nv
-  if V.listNull outerLst
+concatListsNix lists = do
+  outer <- V.demandList "builtins.concatLists" lists
+  if V.listNull outer
     then pure V.internedEmptyList
     else do
-      innerLists <- traverse (V.demandList "builtins.concatLists") outerLst
-      let result = fold innerLists
+      inner <- traverse (V.demandList "builtins.concatLists") outer
+      let result = fold inner
       if V.listNull result
         then pure V.internedEmptyList
         else pure $ V.mkList result
@@ -277,13 +277,13 @@ concatMapNix
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-concatMapNix f nv = do
-  outerLst <- V.demandList "builtins.concatMap" nv
-  if V.listNull outerLst
+concatMapNix f list = do
+  outer <- V.demandList "builtins.concatMap" list
+  if V.listNull outer
     then pure V.internedEmptyList
     else do
-      innerLists <- traverse (\x -> V.demandList "builtins.concatMap" =<< V.callFunc f x) outerLst
-      let result = fold innerLists
+      inner <- traverse (\x -> V.demandList "builtins.concatMap" =<< V.callFunc f x) outer
+      let result = fold inner
       if V.listNull result
         then pure V.internedEmptyList
         else pure $ V.mkList result

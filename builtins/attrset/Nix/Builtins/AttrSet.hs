@@ -66,13 +66,13 @@ hasAttrNix
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-hasAttrNix x y = do
-  keyText <- V.demandString "builtins.hasAttr" x
-  aset <- V.demandAttrSet "builtins.hasAttr" y
+hasAttrNix name set = do
+  key <- V.demandString "builtins.hasAttr" name
+  attrs <- V.demandAttrSet "builtins.hasAttr" set
   -- Fast path: empty set always returns false
-  if V.attrSetNull aset
+  if V.attrSetNull attrs
     then pure V.internedFalse
-    else pure $ V.internedBool $ V.attrSetMember (mkVarName keyText) aset
+    else pure $ V.internedBool $ V.attrSetMember (mkVarName key) attrs
 
 -- | Get an attribute from a set.
 getAttrNix
@@ -80,11 +80,11 @@ getAttrNix
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-getAttrNix x y = do
-  keyText <- V.demandString "builtins.getAttr" x
-  aset <- V.demandAttrSet "builtins.getAttr" y
-  case V.attrSetLookup (mkVarName keyText) aset of
-    Nothing -> V.throwTypeError $ "builtins.getAttr: attribute '" <> keyText <> "' missing"
+getAttrNix name set = do
+  key <- V.demandString "builtins.getAttr" name
+  attrs <- V.demandAttrSet "builtins.getAttr" set
+  case V.attrSetLookup (mkVarName key) attrs of
+    Nothing -> V.throwTypeError $ "builtins.getAttr: attribute '" <> key <> "' missing"
     Just v -> pure v
 
 -- * Attribute queries
@@ -95,8 +95,8 @@ attrNamesNix
   :: forall t f m . MonadAttrSetBuiltin t f m
   => NValue t f m
   -> m (NValue t f m)
-attrNamesNix nvset = do
-  attrs <- V.demandAttrSet "builtins.attrNames" nvset
+attrNamesNix set = do
+  attrs <- V.demandAttrSet "builtins.attrNames" set
   if V.attrSetNull attrs
     then pure V.internedEmptyList
     else do
@@ -111,8 +111,8 @@ attrValuesNix
   :: forall t f m . MonadAttrSetBuiltin t f m
   => NValue t f m
   -> m (NValue t f m)
-attrValuesNix nvattrs = do
-  attrs <- V.demandAttrSet "builtins.attrValues" nvattrs
+attrValuesNix set = do
+  attrs <- V.demandAttrSet "builtins.attrValues" set
   if V.attrSetNull attrs
     then pure V.internedEmptyList
     else do
@@ -129,20 +129,20 @@ mapAttrsNix
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-mapAttrsNix f xs = do
-  nixAttrset <- V.demandAttrSet "builtins.mapAttrs" xs
-  if V.attrSetNull nixAttrset
+mapAttrsNix f set = do
+  attrs <- V.demandAttrSet "builtins.mapAttrs" set
+  if V.attrSetNull attrs
     then pure V.internedEmptySet
     else do
-      result <- V.attrSetTraverseWithKey applyFunToKeyVal nixAttrset
+      result <- V.attrSetTraverseWithKey applyF attrs
       pure $ V.mkSetRaw result
  where
-  applyFunToKeyVal key val =
+  applyF key val =
     V.defer $ do
       -- Call f with the key string
-      runFunForKey <- V.callFunc f $ V.mkStringNoContext (varNameText key)
+      f' <- V.callFunc f $ V.mkStringNoContext (varNameText key)
       -- Call the result with the value
-      V.callFunc runFunForKey val
+      V.callFunc f' val
 
 -- | Extract attribute from each attrset in a list, if present.
 catAttrsNix
@@ -150,23 +150,23 @@ catAttrsNix
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-catAttrsNix attrName xs = do
-  n <- V.demandString "builtins.catAttrs" attrName
-  v <- V.demandList "builtins.catAttrs" xs
-  if V.listNull v
+catAttrsNix name list = do
+  attrName <- V.demandString "builtins.catAttrs" name
+  lst <- V.demandList "builtins.catAttrs" list
+  if V.listNull lst
     then pure V.internedEmptyList
     else do
       -- Traverse the list, extracting the attribute from each attrset
-      let key = mkVarName n
-      maybeVals <- traverse (extractAttrFromSet key) v
+      let key = mkVarName attrName
+      maybeVals <- traverse (extractAttr key) lst
       let result = V.listFromList $ catMaybes $ V.listToList maybeVals
       if V.listNull result
         then pure V.internedEmptyList
         else pure $ V.mkList result
  where
-  extractAttrFromSet :: VarName -> NValue t f m -> m (Maybe (NValue t f m))
-  extractAttrFromSet key nv' = do
-    attrs <- V.demandAttrSet "builtins.catAttrs" nv'
+  extractAttr :: VarName -> NValue t f m -> m (Maybe (NValue t f m))
+  extractAttr key elem = do
+    attrs <- V.demandAttrSet "builtins.catAttrs" elem
     pure $ V.attrSetLookup key attrs
 
 -- * Set operations
@@ -178,19 +178,19 @@ removeAttrsNix
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-removeAttrsNix set v = do
-  m <- V.demandAttrSet "builtins.removeAttrs" set
-  toRemoveList <- V.demandList "builtins.removeAttrs" v
+removeAttrsNix set names = do
+  attrs <- V.demandAttrSet "builtins.removeAttrs" set
+  nameList <- V.demandList "builtins.removeAttrs" names
   -- Extract string names from the list
-  toRemove <- traverse extractName toRemoveList
-  let resultAttrs = foldl' (flip V.attrSetDelete) m toRemove
-  if V.attrSetNull resultAttrs
+  keysToRemove <- traverse extractKey nameList
+  let result = foldl' (flip V.attrSetDelete) attrs keysToRemove
+  if V.attrSetNull result
     then pure V.internedEmptySet
-    else pure $ V.mkSetRaw resultAttrs
+    else pure $ V.mkSetRaw result
  where
-  extractName :: NValue t f m -> m VarName
-  extractName nv' = do
-    s <- V.demandString "builtins.removeAttrs" nv'
+  extractKey :: NValue t f m -> m VarName
+  extractKey elem = do
+    s <- V.demandString "builtins.removeAttrs" elem
     pure $ mkVarName s
 
 -- | Intersection of two attribute sets.
@@ -200,14 +200,14 @@ intersectAttrsNix
   -> NValue t f m
   -> m (NValue t f m)
 intersectAttrsNix set1 set2 = do
-  s1 <- V.demandAttrSet "builtins.intersectAttrs" set1
-  s2 <- V.demandAttrSet "builtins.intersectAttrs" set2
+  attrs1 <- V.demandAttrSet "builtins.intersectAttrs" set1
+  attrs2 <- V.demandAttrSet "builtins.intersectAttrs" set2
   -- Fast path: return interned empty set if either input is empty
-  if V.attrSetNull s1 || V.attrSetNull s2
+  if V.attrSetNull attrs1 || V.attrSetNull attrs2
     then pure V.internedEmptySet
     else do
-      -- Intersection keeps values from s2 where keys exist in s1
-      let result = s2 `V.attrSetIntersection` s1
+      -- Intersection keeps values from attrs2 where keys exist in attrs1
+      let result = attrs2 `V.attrSetIntersection` attrs1
       if V.attrSetNull result
         then pure V.internedEmptySet
         else pure $ V.mkSetRaw result
@@ -220,26 +220,26 @@ listToAttrsNix
   :: forall t f m . MonadAttrSetBuiltin t f m
   => NValue t f m
   -> m (NValue t f m)
-listToAttrsNix lst = do
-  v <- V.demandList "builtins.listToAttrs" lst
-  if V.listNull v
+listToAttrsNix list = do
+  lst <- V.demandList "builtins.listToAttrs" list
+  if V.listNull lst
     then pure V.internedEmptySet
     else do
       -- Build pairs in order
-      pairs <- traverse extractPair v
+      pairs <- traverse extractPair lst
       -- Use foldr' so first occurrence wins (Nix semantics)
       let result = foldr' (uncurry V.attrSetInsert) V.attrSetEmpty pairs
       pure $ V.mkSetRaw result
  where
   extractPair :: NValue t f m -> m (VarName, NValue t f m)
-  extractPair nv' = do
-    a <- V.demandAttrSet "builtins.listToAttrs" nv'
+  extractPair elem = do
+    attrs <- V.demandAttrSet "builtins.listToAttrs" elem
     -- Get "name" attribute
-    case V.attrSetLookup (mkVarName "name") a of
+    case V.attrSetLookup (mkVarName "name") attrs of
       Nothing -> V.throwTypeError "builtins.listToAttrs: element missing 'name' attribute"
-      Just nameNv -> do
-        nameText <- V.demandString "builtins.listToAttrs" nameNv
+      Just nameVal -> do
+        key <- V.demandString "builtins.listToAttrs" nameVal
         -- Get "value" attribute
-        case V.attrSetLookup (mkVarName "value") a of
+        case V.attrSetLookup (mkVarName "value") attrs of
           Nothing -> V.throwTypeError "builtins.listToAttrs: element missing 'value' attribute"
-          Just val -> pure (mkVarName nameText, val)
+          Just val -> pure (mkVarName key, val)
