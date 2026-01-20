@@ -57,6 +57,7 @@ import           Data.Fixed                     ( Pico )
 import           NeatInterpolation              ( text )
 import           Nix.Atoms
 import           Nix.Builtins.Internal
+import           Nix.Builtins.Type
 import           Nix.Convert
 import           Nix.Core.List                  ( NixList )
 import qualified Nix.Core.List                 as L
@@ -1186,19 +1187,6 @@ intersectAttrsNix set1 set2 =
           then askInternedEmptySet
           else pure $ NVSet (p2 `A.intersection` p1) result
 
-functionArgsNix
-  :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-functionArgsNix nvfun =
-  do
-    fun <- demand nvfun
-    case fun of
-      NVClosure p _ ->
-        toValue @(AttrSet (NValue t f m)) $ NVBool <$>
-          case p of
-            Param name     -> A.singleton name False
-            ParamSet _ _ pset -> isJust <$> pset
-      _v -> throwError $ ErrorCall $ "builtins.functionArgs: expected function, got " <> show _v
-
 toFileNix
   :: MonadNix e t f m
   => NValue t f m
@@ -1259,59 +1247,6 @@ pathExistsNix nvpath =
         then storePathExists path
         else doesPathExist path
     askInternedBool exists
-
--- | Check if a value is a path. Returns interned boolean.
-isPathNix
-  :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-isPathNix nv = do
-  v <- demand nv
-  case v of
-    NVPath _ -> askInternedTrue
-    _        -> askInternedFalse
-
-isAttrsNix
-  :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-isAttrsNix = hasKind @(AttrSet (NValue t f m))
-
--- | O(1) check using Vector type instead of list to avoid O(n) L.nlToList conversion.
-isListNix
-  :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-isListNix = hasKind @(NixList (NValue t f m))
-
-isIntNix
-  :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-isIntNix = hasKind @Int
-
-isFloatNix
-  :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-isFloatNix = hasKind @Double
-
-isBoolNix
-  :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-isBoolNix = hasKind @Bool
-
-isNullNix
-  :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
-isNullNix = hasKind @()
-
--- | Check if a value is a string. Returns interned boolean.
--- Note: Cannot use `hasKind` because it coerces derivations to strings.
-isStringNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
-isStringNix nv =
-  do
-    v <- demand nv
-    case v of
-      NVStr{} -> askInternedTrue
-      _       -> askInternedFalse
-
--- | Check if a value is a function. Returns interned boolean.
-isFunctionNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
-isFunctionNix nv =
-  do
-    v <- demand nv
-    case v of
-      NVClosure{} -> askInternedTrue
-      _           -> askInternedFalse
 
 throwNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 throwNix =
@@ -2081,30 +2016,6 @@ toJSONNix = (fmap NVStr . toJSONNixString) <=< demand
 
 toXMLNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 toXMLNix = (fmap (NVStr . toXML) . normalForm) <=< demand
-
-typeOfNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
-typeOfNix nvv =
-  do
-    v <- demand nvv
-    let
-      detectType =
-        case v of
-          NVConstant a ->
-            case a of
-              NURI   _ -> "string"
-              NInt   _ -> "int"
-              NFloat _ -> "float"
-              NBool  _ -> "bool"
-              NNull    -> "null"
-          NVStr     _   -> "string"
-          NVList    _   -> "list"
-          NVSet     _ _ -> "set"
-          NVClosure{}   -> "lambda"
-          NVPath    _   -> "path"
-          NVBuiltin _ _ -> "lambda"
-          _             -> error "Pattern synonyms obscure complete patterns"
-
-    toValue $ mkNixStringWithoutContext detectType
 
 tryEvalNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)
