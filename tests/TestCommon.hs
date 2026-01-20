@@ -1,4 +1,5 @@
 {-# language DataKinds #-}
+{-# language RankNTypes #-}
 
 module TestCommon
   ( -- * Test-specific type aliases
@@ -39,7 +40,10 @@ type StdVal = ValueF 'False StandardIO
 type StdThun = ThunkF 'False StandardIO
 
 -- | Run with basic effects in IO using default configuration.
-runWithBasicEffectsIO :: Options -> StdM 'False DefaultCfg IO a -> IO a
+--
+-- The action receives the 'GivenStdInterned' constraint from 'runWithBasicEffects'
+-- via 'give', enabling zero-overhead access to interned values.
+runWithBasicEffectsIO :: Options -> (GivenStdInterned 'False DefaultCfg IO => StdM 'False DefaultCfg IO a) -> IO a
 runWithBasicEffectsIO = runWithBasicEffects
 
 hnixEvalFile :: Options -> Path -> IO StdVal
@@ -70,7 +74,7 @@ hnixEvalText :: Options -> Text -> IO StdVal
 hnixEvalText opts src =
   either
     (\ err -> fail $ toString $ "Parsing failed for expression `" <> src <> "`.\n" <> show err)
-    (runWithBasicEffects opts . (normalForm <=< nixEvalExpr mempty))
+    (\expr -> runWithBasicEffects opts (normalForm =<< nixEvalExpr mempty expr))
     $ parseNixText src
 
 nixEvalText :: Text -> IO Text

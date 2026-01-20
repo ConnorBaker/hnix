@@ -241,7 +241,7 @@ hasKind
   -> m (NValue t f m)
 hasKind nv = do
   mv <- fromValueMay @a nv
-  askInternedBool $ isJust mv
+  pure . internedBool $ isJust mv
 
 -- * Version handling
 
@@ -345,7 +345,7 @@ splitMatches numDropped (((_, (start, len)) : captures) : mts) haystack =
   f (a, (s, _))  =
     if s >= 0
       then thunkStr a
-      else NVNull
+      else internedNull
 
 thunkStr :: NVConstraint f => ByteString -> NValue t f m
 thunkStr s = mkNVStrWithoutContext $ decodeUtf8 s

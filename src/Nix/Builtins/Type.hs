@@ -63,8 +63,8 @@ isFunctionNix nv =
   do
     v <- demand nv
     case v of
-      NVClosure{} -> askInternedTrue
-      _           -> askInternedFalse
+      NVClosure{} -> pure internedTrue
+      _           -> pure internedFalse
 
 -- | Check if a value is an integer. Returns interned boolean.
 isIntNix
@@ -87,8 +87,8 @@ isPathNix
 isPathNix nv = do
   v <- demand nv
   case v of
-    NVPath _ -> askInternedTrue
-    _        -> askInternedFalse
+    NVPath _ -> pure internedTrue
+    _        -> pure internedFalse
 
 -- | Check if a value is a string. Returns interned boolean.
 -- Note: Cannot use `hasKind` because it coerces derivations to strings.
@@ -97,8 +97,8 @@ isStringNix nv =
   do
     v <- demand nv
     case v of
-      NVStr{} -> askInternedTrue
-      _       -> askInternedFalse
+      NVStr{} -> pure internedTrue
+      _       -> pure internedFalse
 
 -- | Get the type of a value as a string.
 typeOfNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)

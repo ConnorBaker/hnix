@@ -87,7 +87,7 @@ tailNix nv = do
     Nothing -> throwError $ ErrorCall "builtins.tail: empty list"
     -- Fast path: return interned empty list for singleton input
     Just t
-      | L.nlNull t  -> askInternedEmptyList
+      | L.nlNull t  -> pure internedEmptyList
       | otherwise -> pure $ NVList t
 
 -- | Get the element at a given index.
@@ -125,7 +125,7 @@ anyNix f nvList = do
       if r then pure True else acc)
     (pure False)
     vec
-  askInternedBool result
+  pure . internedBool result
 
 -- | Short-circuit evaluation: returns False as soon as any element fails the predicate.
 -- Uses L.nlFoldr with lazy accumulator to avoid evaluating remaining elements.
@@ -144,7 +144,7 @@ allNix f nvList = do
       if r then acc else pure False)
     (pure True)
     vec
-  askInternedBool result
+  pure . internedBool result
 
 -- | Check if an element is in a list.
 -- Returns interned false immediately for empty list (fast path).
@@ -160,8 +160,8 @@ elemNix x lst = do
   vec <- fromValue @(NixList (NValue t f m)) lst
   -- Fast path: empty list always returns false
   if L.nlNull vec
-    then askInternedFalse
-    else askInternedBool =<< anyMVec (valueEqM x) vec
+    then pure internedFalse
+    else pure . internedBool =<< anyMVec (valueEqM x) vec
  where
   -- | Short-circuiting any for NixList - O(1) indexing, no list conversion
   anyMVec :: Monad m => (a -> m Bool) -> NixList a -> m Bool
@@ -192,7 +192,7 @@ mapNix f nv = do
   v <- fromValue @(NixList (NValue t f m)) nv
   -- Fast path: return interned empty list for empty input
   if L.nlNull v
-    then askInternedEmptyList
+    then pure internedEmptyList
     else do
       result <- L.nlTraverse
         (defer . withFrame Debug (ErrorCall "While applying f in map:\n") . callFunc f)
@@ -212,12 +212,12 @@ filterNix f nv = do
   v <- fromValue @(NixList (NValue t f m)) nv
   -- Fast path: return interned empty list for empty input
   if L.nlNull v
-    then askInternedEmptyList
+    then pure internedEmptyList
     else do
       result <- L.nlFilterM predicate v
       -- Fast path: return interned empty list if all elements filtered out
       if L.nlNull result
-        then askInternedEmptyList
+        then pure internedEmptyList
         else toValue result
  where
   predicate :: NValue t f m -> m Bool
@@ -248,7 +248,7 @@ sortNix comp nv = do
   v <- fromValue @[NValue t f m] nv
   -- Fast path: return interned empty list for empty/singleton input
   case v of
-    []  -> askInternedEmptyList
+    []  -> pure internedEmptyList
     [x] -> toValue [x]  -- singleton doesn't need sorting
     _   -> toValue =<< sortByM cmp v
  where
@@ -284,7 +284,7 @@ genListNix f nixN =
       then throwError $ ErrorCall $ "builtins.genList: Expected a non-negative number, got " <> show n
       -- Fast path: return interned empty list for n=0
       else if n == 0
-        then askInternedEmptyList
+        then pure internedEmptyList
         else toValue =<< L.nlGenerateM (fromIntegral n) genElement
  where
   genElement i = defer $ callFunc f =<< toValue (fromIntegral i :: Integer)
@@ -304,14 +304,14 @@ concatWith f nv = do
   outerVec <- fromValue @(NixList (NValue t f m)) nv
   -- Fast path: return interned empty list for empty input
   if L.nlNull outerVec
-    then askInternedEmptyList
+    then pure internedEmptyList
     else do
       innerVecs <- L.nlMapM (fromValue @(NixList (NValue t f m)) <=< f) outerVec
       -- Use fold instead of L.nlConcat to avoid intermediate list allocation
       let result = fold innerVecs
       -- Fast path: return interned empty list if result is empty
       if L.nlNull result
-        then askInternedEmptyList
+        then pure internedEmptyList
         else pure $ NVList result
 
 -- | Nix function of Haskell:
@@ -397,7 +397,7 @@ groupByNix nvfun nvlist = do
   (f, v) <- extractP (fun, list)
   -- Fast path: return interned empty set for empty input
   if L.nlNull v
-    then askInternedEmptySet
+    then pure internedEmptySet
     else do
       -- Build up groups maintaining order: old ++ new (flip because insertWith passes new first)
       result <- L.nlFoldM'
@@ -428,7 +428,7 @@ partitionNix
 partitionNix f nvlst =
   do
     v <- fromValue @(NixList (NValue t f m)) nvlst
-    emptyList <- askInternedEmptyList
+    emptyList <- pure internedEmptyList
 
     -- Fast path: return interned empty lists for empty input
     if L.nlNull v

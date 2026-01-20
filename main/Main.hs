@@ -67,7 +67,7 @@ runDerivationCommand currentTime = \case
     let
       runDerivation
         :: forall (prov :: Bool) (cfg :: EvalCfg) m
-         . (StdBase m, KnownEvalCfg cfg, SBoolI prov, Typeable prov)
+         . (StdBase m, KnownEvalCfg cfg, SBoolI prov, Typeable prov, GivenStdInterned prov cfg m)
         => StdM prov cfg m ()
       runDerivation = do
         -- Get initial paths from either --expr or positional arguments
@@ -117,7 +117,7 @@ runDerivationCommand currentTime = \case
 
 -- | Evaluate an expression and extract its drvPath
 evalExprToDrvPath
-  :: forall (prov :: Bool) (cfg :: EvalCfg) m. (StdBase m, KnownEvalCfg cfg, SBoolI prov, Typeable prov)
+  :: forall (prov :: Bool) (cfg :: EvalCfg) m. (StdBase m, KnownEvalCfg cfg, SBoolI prov, Typeable prov, GivenStdInterned prov cfg m)
   => Text -> StdM prov cfg m Path
 evalExprToDrvPath expr = do
   case parseNixTextLoc expr of
@@ -135,7 +135,7 @@ evalExprToDrvPath expr = do
 
 -- | Recursively collect all derivation paths including dependencies
 collectRecursiveDrvPaths
-  :: forall (prov :: Bool) (cfg :: EvalCfg) m. (StdBase m, KnownEvalCfg cfg, SBoolI prov, Typeable prov)
+  :: forall (prov :: Bool) (cfg :: EvalCfg) m. (StdBase m, KnownEvalCfg cfg, SBoolI prov, Typeable prov, GivenStdInterned prov cfg m)
   => [Path] -> StdM prov cfg m [Path]
 collectRecursiveDrvPaths initialPaths = do
   -- Use a set to track visited paths and avoid duplicates
@@ -166,7 +166,7 @@ main' opts@Options{..} =
   --  2021-07-15: NOTE: This logic should be weaved stronger through CLI options logic (OptParse-Applicative code)
   -- As this logic is not stated in the CLI documentation, for example. So user has no knowledge of these.
   execContentsFilesOrRepl
-    :: forall (prov :: Bool) (cfg :: EvalCfg) m. (StdBase m, KnownEvalCfg cfg, SBoolI prov, Typeable prov) => StdM prov cfg m ()
+    :: forall (prov :: Bool) (cfg :: EvalCfg) m. (StdBase m, KnownEvalCfg cfg, SBoolI prov, Typeable prov, GivenStdInterned prov cfg m) => StdM prov cfg m ()
   execContentsFilesOrRepl =
     fromMaybe
       loadFromCliFilePathList
@@ -217,16 +217,16 @@ main' opts@Options{..} =
       ) <$> getFromFile
 
   processExpr
-    :: forall (prov :: Bool) (cfg :: EvalCfg) m. (StdBase m, KnownEvalCfg cfg, SBoolI prov, Typeable prov)
+    :: forall (prov :: Bool) (cfg :: EvalCfg) m. (StdBase m, KnownEvalCfg cfg, SBoolI prov, Typeable prov, GivenStdInterned prov cfg m)
     => Text -> StdM prov cfg m ()
   processExpr = handleResult @prov @cfg mempty . parseNixTextLoc
 
-  withEmptyNixContext :: (StdBase m, KnownEvalCfg cfg, SBoolI prov, Typeable prov) => StdM prov cfg m a -> StdM prov cfg m a
+  withEmptyNixContext :: (StdBase m, KnownEvalCfg cfg, SBoolI prov, Typeable prov, GivenStdInterned prov cfg m) => StdM prov cfg m a -> StdM prov cfg m a
   withEmptyNixContext = withNixContext mempty
 
   --  2021-07-15: NOTE: @handleResult@ & @process@ - have atrocious size & compexity, they need to be decomposed & refactored.
   handleResult
-    :: forall (prov :: Bool) (cfg :: EvalCfg) m err. (StdBase m, KnownEvalCfg cfg, SBoolI prov, Typeable prov, Show err)
+    :: forall (prov :: Bool) (cfg :: EvalCfg) m err. (StdBase m, KnownEvalCfg cfg, SBoolI prov, Typeable prov, GivenStdInterned prov cfg m, Show err)
     => Maybe Path -> Either err NExprLoc -> StdM prov cfg m ()
   handleResult mpath =
     either
@@ -273,7 +273,7 @@ main' opts@Options{..} =
   --  2021-07-15: NOTE: Logic of CLI Option processing is scattered over several functions, needs to be consolicated.
   -- Now uses type-level dispatch for stats/tracing via KnownEvalCfg cfg.
   processCLIOptions
-    :: forall (prov :: Bool) (cfg :: EvalCfg) m. (StdBase m, KnownEvalCfg cfg, SBoolI prov, Typeable prov)
+    :: forall (prov :: Bool) (cfg :: EvalCfg) m. (StdBase m, KnownEvalCfg cfg, SBoolI prov, Typeable prov, GivenStdInterned prov cfg m)
     => Maybe Path -> NExprLoc -> StdM prov cfg m ()
   processCLIOptions mpath expr
     | isEvaluate =

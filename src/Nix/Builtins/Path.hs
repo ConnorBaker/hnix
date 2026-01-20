@@ -314,7 +314,7 @@ pathExistsNix nvpath =
       if isStorePath opts path
         then storePathExists path
         else doesPathExist path
-    askInternedBool exists
+    pure . internedBool exists
 
 readFileNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 readFileNix nvpath = do
@@ -571,8 +571,8 @@ fromJSONNix nvjson =
             case floatingOrInteger n of
               Left f -> NFloat f
               Right i -> NInt i
-      A.Bool   b -> pure $ NVBool b
-      A.Null     -> pure NVNull
+      A.Bool   b -> pure $ internedBool b
+      A.Null     -> pure internedNull
    where
     traverseToNValue :: Traversable t0 => (t0 (NValue t f m) -> b) -> t0 A.Value -> m b
     traverseToNValue f v = f <$> traverse jsonToNValue v
@@ -598,7 +598,7 @@ fromTOMLNix nvtoml = do
       | n < fromIntegral (minBound :: Int64) -> throwError $ ErrorCall $ "builtins.fromTOML: integer too small: " <> show n
       | otherwise -> pure $ NVConstant $ NInt (fromIntegral n)
     Toml.Double' _ d  -> pure $ NVConstant $ NFloat (realToFrac d)
-    Toml.Bool' _ b    -> pure $ NVConstant $ NBool b
+    Toml.Bool' _ b    -> pure $ internedBool b
     Toml.Text' _ t    -> pure $ mkNVStrWithoutContext t
     Toml.List' _ xs   -> NVList <$> traverse tomlToNValue (L.nlFromList xs)
     Toml.Table' _ t   -> tableToNValue t

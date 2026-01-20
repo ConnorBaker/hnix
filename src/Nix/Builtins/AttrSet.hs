@@ -60,8 +60,8 @@ hasAttrNix x y =
     (aset, _) <- fromValue @(AttrSet (NValue t f m), PositionSet) y
     -- Fast path: empty set always returns false
     if A.null aset
-      then askInternedFalse
-      else askInternedBool $ A.member key aset
+      then pure internedFalse
+      else pure . internedBool $ A.member key aset
 
 getAttrNix
   :: forall e t f m
@@ -86,7 +86,7 @@ attrNamesNix
 attrNamesNix nvset = do
   attrs <- fromValue @(AttrSet (NValue t f m)) nvset
   if A.null attrs
-    then askInternedEmptyList
+    then pure internedEmptyList
     else fmap coersion $ toValue @[NixString] $
       fmap (mkNixStringWithoutContext . varNameText) $ sort $ A.keys attrs
  where
@@ -100,7 +100,7 @@ attrValuesNix nvattrs =
   do
     attrs <- fromValue @(AttrSet (NValue t f m)) nvattrs
     if A.null attrs
-      then askInternedEmptyList
+      then pure internedEmptyList
       else toValue $
         snd <$>
           sortOn
@@ -121,7 +121,7 @@ mapAttrsNix f xs =
     nixAttrset <- fromValue @(AttrSet (NValue t f m)) xs
     -- Fast path: return interned empty set for empty input
     if A.null nixAttrset
-      then askInternedEmptySet
+      then pure internedEmptySet
       else do
         result <- A.traverseWithKey applyFunToKeyVal nixAttrset
         toValue result
@@ -143,7 +143,7 @@ zipAttrsWithNix f nvSets =
 
     -- Fast path: return interned empty set for empty input
     if L.nlNull sets
-      then askInternedEmptySet
+      then pure internedEmptySet
       else do
         -- Collect values by key, accumulating as lists (O(1) prepend) then converting to Vector at end
         -- Uses (++) which prepends [val] to existing list in O(1), building lists in reverse order
@@ -162,7 +162,7 @@ zipAttrsWithNix f nvSets =
 
         -- Fast path: return interned empty set if all input sets were empty
         if HM.null collected
-          then askInternedEmptySet
+          then pure internedEmptySet
           else do
             result <- HM.traverseWithKey applyFunToKeyVals collected
             toValue (A.fromList $ HM.toList result)
@@ -186,7 +186,7 @@ catAttrsNix attrName xs =
 
     -- Fast path: return interned empty list for empty input
     if L.nlNull v
-      then askInternedEmptyList
+      then pure internedEmptyList
       else do
         -- Use L.nlMapMaybe to filter and transform in one pass
         result <- L.nlMapMaybe id <$>
@@ -195,7 +195,7 @@ catAttrsNix attrName xs =
             v
         -- Fast path: return interned empty list if result is empty
         if L.nlNull result
-          then askInternedEmptyList
+          then pure internedEmptyList
           else pure $ NVList result
 
 
@@ -216,7 +216,7 @@ removeAttrsNix set v =
     (fmap mkVarName -> toRemove) <- traverse fromStringNoContext nsToRemove
     let resultAttrs = fun m toRemove
     if A.null resultAttrs
-      then askInternedEmptySet
+      then pure internedEmptySet
       else toValue (resultAttrs, fun p toRemove)
  where
   fun :: AttrSet a -> [VarName] -> AttrSet a
@@ -235,12 +235,12 @@ intersectAttrsNix set1 set2 =
 
     -- Fast path: return interned empty set if either input is empty
     if A.null s1 || A.null s2
-      then askInternedEmptySet
+      then pure internedEmptySet
       else do
         let result = s2 `A.intersection` s1
         -- Fast path: return interned empty set if result is empty
         if A.null result
-          then askInternedEmptySet
+          then pure internedEmptySet
           else pure $ NVSet (p2 `A.intersection` p1) result
 
 
@@ -253,7 +253,7 @@ listToAttrsNix lst =
     v <- fromValue @(NixList (NValue t f m)) lst
     -- Fast path: return interned empty set for empty input
     if L.nlNull v
-      then askInternedEmptySet
+      then pure internedEmptySet
       else do
         -- Build pairs in order, then use HM.fromList with reversed order
         -- so first occurrence wins (Nix semantics: first key wins)

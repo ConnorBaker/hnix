@@ -41,7 +41,16 @@ import           Nix.Expr.Types.Annotated
 import           Nix.Frames
 import           Nix.Options
 import           Nix.Context                    ( askEvalStats, CtxCfg, HasEvalCfg )
-import           Nix.Value.Interned             ( InternedValues(..) )
+import           Nix.Value.Interned             ( InternedValues(..)
+                                                , GivenInterned
+                                                , internedTrue
+                                                , internedFalse
+                                                , internedNull
+                                                , internedEmptyList
+                                                , internedEmptySet
+                                                , internedEmptyString
+                                                , internedBool
+                                                )
 import           Nix.EvalStats                  ( EvalStats(..), withExprTiming, withBuiltinTiming )
 import           Nix.Pretty
 import           Nix.Render
@@ -156,11 +165,16 @@ type MonadCitedThunks t f m =
 -- to achieve zero-cost conditional execution. We deliberately avoid adding type
 -- parameters here, as doing so would cause cascading ambiguous type variable
 -- errors throughout the codebase.
+--
+-- The @GivenInterned t f m@ constraint provides zero-overhead access to
+-- singleton values (true, false, null, [], {}) via the @reflection@ library.
+-- Use @internedTrue@, @internedFalse@, @internedBool@, etc. for pure access.
 type MonadNix e t f m =
   ( Has e SrcSpan
   , Has e Options
   , Has e (Maybe EvalStats)
-  , Has e (InternedValues t f m)
+  , Has e (InternedValues t f m)  -- TODO: Remove after full migration to Given
+  , GivenInterned t f m  -- Zero-overhead interned value access
   , Scoped (NValue t f m) m
   , Framed e m
   , MonadFix m
@@ -182,38 +196,6 @@ nverr = evalError @(NValue t f m)
 
 askSpan :: forall e m . (MonadReader e m, Has e SrcSpan) => m SrcSpan
 askSpan = askLocal
-
--- | Access interned singleton values from the evaluation context.
---
--- These accessors provide zero-allocation access to frequently-used constant
--- values (true, false, null, empty list, empty set) that are created once
--- per evaluation and shared throughout.
-
-askInternedTrue :: forall e t f m . (MonadReader e m, Has e (InternedValues t f m)) => m (NValue t f m)
-askInternedTrue = internedTrue <$> askLocal
-{-# INLINE askInternedTrue #-}
-
-askInternedFalse :: forall e t f m . (MonadReader e m, Has e (InternedValues t f m)) => m (NValue t f m)
-askInternedFalse = internedFalse <$> askLocal
-{-# INLINE askInternedFalse #-}
-
-askInternedNull :: forall e t f m . (MonadReader e m, Has e (InternedValues t f m)) => m (NValue t f m)
-askInternedNull = internedNull <$> askLocal
-{-# INLINE askInternedNull #-}
-
-askInternedEmptyList :: forall e t f m . (MonadReader e m, Has e (InternedValues t f m)) => m (NValue t f m)
-askInternedEmptyList = internedEmptyList <$> askLocal
-{-# INLINE askInternedEmptyList #-}
-
-askInternedEmptySet :: forall e t f m . (MonadReader e m, Has e (InternedValues t f m)) => m (NValue t f m)
-askInternedEmptySet = internedEmptySet <$> askLocal
-{-# INLINE askInternedEmptySet #-}
-
--- | Return an interned boolean value based on a condition.
-askInternedBool :: forall e t f m . (MonadReader e m, Has e (InternedValues t f m)) => Bool -> m (NValue t f m)
-askInternedBool True  = askInternedTrue
-askInternedBool False = askInternedFalse
-{-# INLINE askInternedBool #-}
 
 wrapExprLoc :: SrcSpan -> NExprLocF r -> NExprLoc
 wrapExprLoc span x = Fix $ NSymAnn span "<?>" <$ x
@@ -296,8 +278,8 @@ instance (MonadNix e t f m, HasProvCfg (CtxCfg e)) => MonadEval (NValue t f m) m
   evalConstant c = withProvCtx
     (\scope span -> pure $ mkNVConstantWithProvenance scope span c)
     (case c of
-      NBool b -> askInternedBool b
-      NNull   -> askInternedNull
+      NBool b -> pure (internedBool b)
+      NNull   -> pure internedNull
       _       -> pure $ NVConstant c)
 
   evalString str =
@@ -530,7 +512,7 @@ execBinaryOp' op lval rarg =
   wrapBool :: Maybe (NValue t f m) -> Bool -> m (NValue t f m)
   wrapBool rvalM b = withProvCtx
     (\scope span -> pure $ mkNVBinaryOpWithProvenance scope span op (pure lval) rvalM $ NVConstant $ NBool b)
-    (askInternedBool b)
+    (pure (internedBool b))
   {-# INLINE wrapBool #-}
 
 -- | Unified forced binary operator execution with zero-cost provenance dispatch.
@@ -559,7 +541,7 @@ execBinaryOpForced' op lval rval =
           -- Fast paths: avoid allocation when one or both lists are empty
           | L.nlNull ls && L.nlNull rs -> withProvCtx
               (\scope span -> pure $ mkNVBinaryOpWithProvenance scope span op (pure lval) (pure rval) $ NVList L.nlEmpty)
-              askInternedEmptyList
+              pure internedEmptyList
           | L.nlNull ls -> wrapResult rval
           | L.nlNull rs -> wrapResult lval
           | otherwise -> wrapResult $ NVList $ ls <> rs
@@ -571,7 +553,7 @@ execBinaryOpForced' op lval rval =
           -- Fast paths: avoid allocation when one or both sets are empty
           | A.null ls && A.null rs -> withProvCtx
               (\scope span -> pure $ mkNVBinaryOpWithProvenance scope span op (pure lval) (pure rval) $ NVSet emptyPositionSet mempty)
-              askInternedEmptySet
+              pure internedEmptySet
           | A.null ls -> wrapResult rval
           | A.null rs -> wrapResult lval
           | otherwise  -> wrapResult $ NVSet (rp <> lp) (rs <> ls)
@@ -621,7 +603,7 @@ execBinaryOpForced' op lval rval =
   mkBoolP :: Bool -> m (NValue t f m)
   mkBoolP b = withProvCtx
     (\scope span -> pure $ mkNVBinaryOpWithProvenance scope span op (pure lval) (pure rval) $ NVConstant $ NBool b)
-    (askInternedBool b)
+    (pure (internedBool b))
 
   mkIntP :: Int64 -> m (NValue t f m)
   mkIntP = wrapResult . NVConstant . NInt

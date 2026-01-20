@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
 
@@ -33,7 +34,10 @@ type StdThun = ThunkF 'False StandardIO
 
 
 -- | Run an evaluation action and return the result.
-runEval :: StandardIO a -> IO a
+--
+-- The action receives the 'GivenStdInterned' constraint from 'runWithBasicEffects'
+-- via 'give', enabling zero-overhead access to interned values.
+runEval :: (GivenStdInterned 'False DefaultCfg IO => StandardIO a) -> IO a
 runEval action = do
   time <- getCurrentTime
   let opts = defaultOptions time
@@ -45,7 +49,9 @@ runEval action = do
 -- 'normalForm' traverses and reconstructs the entire value tree, which
 -- creates new heap objects even for structurally identical values.
 -- 'demand' only forces the outermost thunk without reconstruction.
-evalExpr :: Text -> StandardIO StdVal
+--
+-- Requires 'GivenStdInterned' constraint, which is satisfied by 'runEval'.
+evalExpr :: GivenStdInterned 'False DefaultCfg IO => Text -> StandardIO StdVal
 evalExpr src =
   case parseNixText src of
     Left err -> errorWithoutStackTrace $ "Parse error: " <> show err
@@ -61,9 +67,11 @@ evalExpr src =
 --
 -- The test evaluates the expression and the getter for the interned value
 -- within the same evaluation context, then compares their StableNames.
+-- The getter has the 'GivenStdInterned' constraint, which is satisfied
+-- by 'runEval'.
 assertPointerEqual
   :: Text                         -- ^ Nix expression to evaluate
-  -> StandardIO StdVal            -- ^ Getter for interned value
+  -> (GivenStdInterned 'False DefaultCfg IO => StandardIO StdVal)  -- ^ Getter for interned value
   -> Text                         -- ^ Description for error message
   -> IO ()
 assertPointerEqual expr getInterned desc = do
@@ -83,7 +91,7 @@ assertPointerEqual expr getInterned desc = do
 -- to an interned value (sanity check).
 assertPointerNotEqual
   :: Text
-  -> StandardIO StdVal
+  -> (GivenStdInterned 'False DefaultCfg IO => StandardIO StdVal)
   -> Text
   -> IO ()
 assertPointerNotEqual expr getInterned desc = do

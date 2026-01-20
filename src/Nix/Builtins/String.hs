@@ -168,7 +168,7 @@ matchNix pat str =
       -- offset >= 0 means the group participated, even if empty (returns the text)
       mkMatch (t, (offset, _len)) =
         if offset < 0
-          then pure NVNull
+          then pure internedNull
           else toValue $ mkNixStringWithoutContext t
 
     case matchOnceText re s of
@@ -183,7 +183,7 @@ matchNix pat str =
                  [_] -> mempty  -- single element means no capture groups, return empty list
                  _:xs -> xs -- return only the matched groups, drop the full string
               )
-      _ -> pure NVNull
+      _ -> pure internedNull
 
 -- | Split a string by a regular expression.
 -- Returns a list alternating between unmatched strings and lists of captured groups.

@@ -610,8 +610,8 @@ constantEqual expected actual =
     (eq, expectedNF, actualNF) <-
       runWithBasicEffectsIO opts $
         do
-          expectedNF <- getNormForm expected
-          actualNF <- getNormForm actual
+          expectedNF <- normalForm =<< nixEvalExprLoc mempty expected
+          actualNF <- normalForm =<< nixEvalExprLoc mempty actual
           eq <- valueEqM expectedNF actualNF
           pure (eq, expectedNF, actualNF)
     let
@@ -620,8 +620,6 @@ constantEqual expected actual =
         <> "Expected: " <> printNix expectedNF <> "\n"
         <>  "Actual:   " <> printNix actualNF
     assertBool (toString message) eq
- where
-  getNormForm = normalForm <=< nixEvalExprLoc mempty
 
 constantEqualText' :: Text -> Text -> Assertion
 constantEqualText' expected actual =
@@ -645,11 +643,7 @@ assertNixEvalThrows a =
       Right a' = parseNixTextLoc a
     errored <-
       catch
-        (False <$
-          runWithBasicEffectsIO
-            opts
-            (normalForm =<< nixEvalExprLoc mempty a')
-        )
+        (False <$ runWithBasicEffectsIO opts (normalForm =<< nixEvalExprLoc mempty a'))
         (\(_ :: NixException) -> pure True)
     when (not errored) $ assertFailure "Did not catch nix exception"
 

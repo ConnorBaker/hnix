@@ -74,13 +74,24 @@ import           Nix.Thunk.Basic                ( NThunkF(..)
                                                 )
 import           Nix.Utils.Fix1                 ( Fix1T(Fix1T) )
 import           Nix.Value
-import           Nix.Value.Interned            ( InternedValues, mkInternedValues )
+import           Nix.Value.Interned            ( InternedValues, mkInternedValues, give, GivenInterned )
 import           Nix.Value.Monad
 import qualified System.IO                     as IO
 import qualified System.Nix.StorePath          as Store
 
 -- | Type alias for the interned values in the standard monad.
 type StdInterned (prov :: Bool) m = InternedValues (ThunkF prov m) (CitedF prov m) m
+
+-- | Constraint alias for functions that access interned values in the standard monad.
+--
+-- This is the specialized form of 'GivenInterned' for 'StdM'.
+-- Use this in type signatures for standard evaluation code:
+--
+-- @
+-- myEval :: (StdBase m, GivenStdInterned prov cfg m) => NExprLoc -> StdM prov cfg m (StdValM prov cfg m)
+-- @
+type GivenStdInterned (prov :: Bool) (cfg :: EvalCfg) m =
+  GivenInterned (ThunkF prov (StdM prov cfg m)) (CitedF prov (StdM prov cfg m)) (StdM prov cfg m)
 
 
 -- * Provenance-indexed types
@@ -376,6 +387,7 @@ instance
   , MonadThunk (ThunkF prov m) m (ValueF prov m)
   , MonadValue (ValueF prov m) m
   , HasProvCfg cfg
+  , GivenInterned (ThunkF prov m) (CitedF prov m) m  -- For interned value access
   )
   => MonadEffects (ThunkF prov m) (CitedF prov m) m where
   toAbsolutePath   = defaultToAbsolutePath
@@ -525,23 +537,31 @@ runStandardT = coerce
 {-# INLINABLE runStandardT #-}
 
 runWithBasicEffectsAndStats
-  :: (MonadIO m, MonadAtomicRef m, SBoolI prov)
+  :: forall m prov cfg a
+   . (MonadIO m, MonadAtomicRef m, SBoolI prov)
   => Options
   -> Maybe EvalStats
-  -> StandardT prov cfg (StdIdT m) a
+  -> (GivenStdInterned prov cfg m => StandardT prov cfg (StdIdT m) a)
   -> m a
-runWithBasicEffectsAndStats opts mstats =
-  fun . (`evalStateT` mempty) . (`runReaderT` newContextWithInterned opts mstats mkInternedValues) . runStandardT
+runWithBasicEffectsAndStats opts mstats action =
+  -- Use 'give' to provide interned values via the Given constraint.
+  -- This enables zero-overhead access to interned values via pure functions
+  -- (internedTrue, internedFalse, etc.) instead of monadic lookups.
+  give interned $
+    fun $ (`evalStateT` mempty) $ (`runReaderT` newContextWithInterned opts mstats interned) $ runStandardT action
  where
-  fun action =
-    runFreshIdT action =<< newRef (1 :: Int)
+  interned :: StdInterned prov (StdM prov cfg m)
+  interned = mkInternedValues
+
+  fun :: StdIdT m a -> m a
+  fun act = runFreshIdT act =<< newRef (1 :: Int)
 
 runWithBasicEffects
   :: (MonadIO m, MonadAtomicRef m, SBoolI prov)
   => Options
-  -> StandardT prov cfg (StdIdT m) a
+  -> (GivenStdInterned prov cfg m => StandardT prov cfg (StdIdT m) a)
   -> m a
-runWithBasicEffects opts = runWithBasicEffectsAndStats opts Nothing
+runWithBasicEffects opts action = runWithBasicEffectsAndStats opts Nothing action
 
 -- | Type-parameterized runner with compile-time configuration dispatch.
 --
@@ -549,6 +569,9 @@ runWithBasicEffects opts = runWithBasicEffectsAndStats opts Nothing
 -- this function enables zero-cost conditional execution. The @prov@ singleton from
 -- @cfg@ is extracted and used to branch at the top level, calling specialized runners
 -- for @'True@ or @'False@.
+--
+-- The action receives interned values via the @GivenStdInterned@ constraint,
+-- enabling zero-overhead access to singleton values (true, false, null, [], {}).
 --
 -- Example usage:
 --
@@ -561,7 +584,7 @@ runWithStoreEffectsIOT
   :: forall (cfg :: EvalCfg) a
    . KnownEvalCfg cfg
   => Options
-  -> (forall (prov :: Bool) m. (StdBase m, KnownEvalCfg cfg, SBoolI prov, Typeable prov) => StdM prov cfg m a)
+  -> (forall (prov :: Bool) m. (StdBase m, KnownEvalCfg cfg, SBoolI prov, Typeable prov, GivenStdInterned prov cfg m) => StdM prov cfg m a)
   -> IO a
 runWithStoreEffectsIOT opts action =
   -- Branch on provenance singleton at the top level.
@@ -576,7 +599,7 @@ runWithStoreEffectsIOT'
   :: forall (prov :: Bool) (cfg :: EvalCfg) a
    . (KnownEvalCfg cfg, SBoolI prov, Typeable prov)
   => Options
-  -> (forall m. (StdBase m, KnownEvalCfg cfg, SBoolI prov, Typeable prov) => StdM prov cfg m a)
+  -> (forall m. (StdBase m, KnownEvalCfg cfg, SBoolI prov, Typeable prov, GivenStdInterned prov cfg m) => StdM prov cfg m a)
   -> IO a
 runWithStoreEffectsIOT' opts action = do
   -- Create stats collector only when type-level says it's needed

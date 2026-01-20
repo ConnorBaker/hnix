@@ -42,7 +42,7 @@ import           Nix.Value.Monad
 hasContextNix :: MonadNix e t f m => NValue t f m -> m (NValue t f m)
 hasContextNix nv = do
   ns <- fromValue nv
-  askInternedBool $ hasContext ns
+  pure . internedBool $ hasContext ns
 
 getContextNix
   :: forall e t f m . MonadNix e t f m => NValue t f m -> m (NValue t f m)

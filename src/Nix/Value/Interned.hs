@@ -10,23 +10,66 @@
 -- reused throughout. This eliminates redundant allocations for frequently-used
 -- constant values.
 --
--- Usage:
+-- == Pure Accessors (Recommended)
+--
+-- The module exports pure accessor functions that use the @Given@ constraint
+-- from the @reflection@ library. This provides zero-overhead access to interned
+-- values without monadic wrapper:
 --
 -- @
--- -- Access interned values via MonadReader
--- nvTrue <- askInternedTrue
--- nvFalse <- askInternedFalse
--- nvNull <- askInternedNull
+-- import Nix.Value.Interned
+--
+-- -- Pure access to interned values (requires Given constraint)
+-- myFunc :: Given (InternedValues t f m) => NValue t f m
+-- myFunc = internedBool True  -- No monadic wrapper needed!
 -- @
 --
--- The interned values are created when the evaluation context is initialized
--- and remain constant for the duration of the evaluation.
+-- The @Given@ constraint is satisfied by wrapping the evaluation entry point
+-- with @give mkInternedValues@.
+--
+-- == Why Reflection?
+--
+-- Previous approach used @MonadReader@ with @Has e (InternedValues t f m)@:
+--
+-- @
+-- -- Old: monadic, requires fmap/bind
+-- askInternedTrue :: (MonadReader e m, Has e (InternedValues t f m)) => m (NValue t f m)
+-- askInternedTrue = internedTrue \<$\> askLocal
+-- @
+--
+-- New approach using @reflection@:
+--
+-- @
+-- -- New: pure, zero overhead
+-- internedTrue :: Given (InternedValues t f m) => NValue t f m
+-- internedTrue = internedTrue' given
+-- @
+--
+-- Benefits:
+--
+-- * No monadic overhead (\<$\> askLocal eliminated)
+-- * GHC can inline the accessor completely
+-- * Pure functions can use interned values without lifting
 module Nix.Value.Interned
   ( InternedValues(..)
   , mkInternedValues
+  -- * Pure accessors (use these!)
+  , GivenInterned
+  , internedTrue
+  , internedFalse
+  , internedNull
+  , internedEmptyList
+  , internedEmptySet
+  , internedEmptyString
+  , internedBool
+  -- * Re-export for give
+  , Given
+  , given
+  , give
   ) where
 
 import           Nix.Prelude
+import           Data.Reflection                ( Given, given, give )
 import           Nix.Atoms                      ( NAtom(..) )
 import           Nix.Expr.Types                 ( emptyPositionSet )
 import           Nix.Value                      ( NValue
@@ -34,8 +77,19 @@ import           Nix.Value                      ( NValue
                                                 , pattern NVConstant
                                                 , pattern NVList
                                                 , pattern NVSet
+                                                , pattern NVStr
                                                 )
 import qualified Nix.Core.List                 as L
+
+-- | Constraint alias for functions that access interned values.
+--
+-- Use this in function signatures instead of writing out the full constraint:
+--
+-- @
+-- myFunc :: GivenInterned t f m => NValue t f m
+-- myFunc = internedBool True
+-- @
+type GivenInterned t f m = Given (InternedValues t f m)
 
 
 -- | Cache of interned constant values, created once per evaluation.
@@ -47,16 +101,18 @@ import qualified Nix.Core.List                 as L
 -- All stored values are constants (no thunks, no closures), so they're
 -- safe to share across the entire evaluation.
 data InternedValues t f m = InternedValues
-  { internedTrue      :: !(NValue t f m)
-  -- ^ The singleton @true@ boolean value.
-  , internedFalse     :: !(NValue t f m)
-  -- ^ The singleton @false@ boolean value.
-  , internedNull      :: !(NValue t f m)
-  -- ^ The singleton @null@ value.
-  , internedEmptyList :: !(NValue t f m)
-  -- ^ The singleton empty list @[]@.
-  , internedEmptySet  :: !(NValue t f m)
-  -- ^ The singleton empty attribute set @{}@.
+  { internedTrue'        :: !(NValue t f m)
+  -- ^ The singleton @true@ boolean value (internal field, use 'internedTrue').
+  , internedFalse'       :: !(NValue t f m)
+  -- ^ The singleton @false@ boolean value (internal field, use 'internedFalse').
+  , internedNull'        :: !(NValue t f m)
+  -- ^ The singleton @null@ value (internal field, use 'internedNull').
+  , internedEmptyList'   :: !(NValue t f m)
+  -- ^ The singleton empty list @[]@ (internal field, use 'internedEmptyList').
+  , internedEmptySet'    :: !(NValue t f m)
+  -- ^ The singleton empty attribute set @{}@ (internal field, use 'internedEmptySet').
+  , internedEmptyString' :: !(NValue t f m)
+  -- ^ The singleton empty string @""@ (internal field, use 'internedEmptyString').
   }
 
 -- | Create interned values for a given evaluation context.
@@ -68,10 +124,58 @@ data InternedValues t f m = InternedValues
 -- All values are strict and fully evaluated at construction time.
 mkInternedValues :: NVConstraint f => InternedValues t f m
 mkInternedValues = InternedValues
-  { internedTrue      = NVConstant (NBool True)
-  , internedFalse     = NVConstant (NBool False)
-  , internedNull      = NVConstant NNull
-  , internedEmptyList = NVList L.nlEmpty
-  , internedEmptySet  = NVSet emptyPositionSet mempty
+  { internedTrue'        = NVConstant (NBool True)
+  , internedFalse'       = NVConstant (NBool False)
+  , internedNull'        = NVConstant NNull
+  , internedEmptyList'   = NVList L.nlEmpty
+  , internedEmptySet'    = NVSet emptyPositionSet mempty
+  , internedEmptyString' = NVStr mempty  -- mempty for NixString is ""
   }
 {-# INLINABLE mkInternedValues #-}
+
+-- * Pure accessors using Given constraint
+--
+-- These functions provide zero-overhead access to interned values.
+-- The Given constraint is satisfied by using 'give mkInternedValues'
+-- at the evaluation entry point.
+
+-- | The singleton @true@ boolean value.
+internedTrue :: GivenInterned t f m => NValue t f m
+internedTrue = internedTrue' given
+{-# INLINE internedTrue #-}
+
+-- | The singleton @false@ boolean value.
+internedFalse :: GivenInterned t f m => NValue t f m
+internedFalse = internedFalse' given
+{-# INLINE internedFalse #-}
+
+-- | The singleton @null@ value.
+internedNull :: GivenInterned t f m => NValue t f m
+internedNull = internedNull' given
+{-# INLINE internedNull #-}
+
+-- | The singleton empty list @[]@.
+internedEmptyList :: GivenInterned t f m => NValue t f m
+internedEmptyList = internedEmptyList' given
+{-# INLINE internedEmptyList #-}
+
+-- | The singleton empty attribute set @{}@.
+internedEmptySet :: GivenInterned t f m => NValue t f m
+internedEmptySet = internedEmptySet' given
+{-# INLINE internedEmptySet #-}
+
+-- | The singleton empty string @""@.
+internedEmptyString :: GivenInterned t f m => NValue t f m
+internedEmptyString = internedEmptyString' given
+{-# INLINE internedEmptyString #-}
+
+-- | Return an interned boolean value based on a condition.
+--
+-- @
+-- internedBool True  = internedTrue
+-- internedBool False = internedFalse
+-- @
+internedBool :: GivenInterned t f m => Bool -> NValue t f m
+internedBool True  = internedTrue
+internedBool False = internedFalse
+{-# INLINE internedBool #-}
