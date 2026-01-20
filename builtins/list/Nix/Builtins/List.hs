@@ -69,10 +69,8 @@ lengthNix
   => NValue t f m
   -> m (NValue t f m)
 lengthNix nv = do
-  v <- V.demand nv
-  case V.extractList v of
-    Just lst -> pure $ V.mkInt $ fromIntegral $ V.listLength lst
-    Nothing  -> V.throwTypeError "builtins.length: expected a list"
+  lst <- V.demandList "builtins.length" nv
+  pure $ V.mkInt $ fromIntegral $ V.listLength lst
 
 -- | Get the first element of a list.
 --
@@ -82,12 +80,10 @@ headNix
   => NValue t f m
   -> m (NValue t f m)
 headNix nv = do
-  v <- V.demand nv
-  case V.extractList v of
-    Just lst -> case V.listHead lst of
-      Nothing -> V.throwTypeError "builtins.head: empty list"
-      Just a  -> pure a
-    Nothing -> V.throwTypeError "builtins.head: expected a list"
+  lst <- V.demandList "builtins.head" nv
+  case V.listHead lst of
+    Nothing -> V.throwTypeError "builtins.head: empty list"
+    Just a  -> pure a
 
 -- | Get all elements after the first.
 --
@@ -97,14 +93,12 @@ tailNix
   => NValue t f m
   -> m (NValue t f m)
 tailNix nv = do
-  v <- V.demand nv
-  case V.extractList v of
-    Just lst -> case V.listTail lst of
-      Nothing -> V.throwTypeError "builtins.tail: empty list"
-      Just t
-        | V.listNull t  -> pure V.internedEmptyList
-        | otherwise     -> pure $ V.mkList t
-    Nothing -> V.throwTypeError "builtins.tail: expected a list"
+  lst <- V.demandList "builtins.tail" nv
+  case V.listTail lst of
+    Nothing -> V.throwTypeError "builtins.tail: empty list"
+    Just t
+      | V.listNull t  -> pure V.internedEmptyList
+      | otherwise     -> pure $ V.mkList t
 
 -- | Get the element at a given index.
 --
@@ -115,16 +109,12 @@ elemAtNix
   -> NValue t f m
   -> m (NValue t f m)
 elemAtNix xs n = do
-  n' <- V.demand n
-  xs' <- V.demand xs
-  case V.extractInt n' of
-    Nothing -> V.throwTypeError "builtins.elemAt: second argument must be an integer"
-    Just i -> case V.extractList xs' of
-      Nothing -> V.throwTypeError "builtins.elemAt: first argument must be a list"
-      Just lst -> case V.listElemAt lst (fromIntegral i) of
-        Nothing -> V.throwTypeError $ "builtins.elemAt: index " <> Text.pack (show i) <>
-                                      " too large for list of length " <> Text.pack (show (V.listLength lst))
-        Just v' -> pure v'
+  i   <- V.demandInt "builtins.elemAt" n
+  lst <- V.demandList "builtins.elemAt" xs
+  case V.listElemAt lst (fromIntegral i) of
+    Nothing -> V.throwTypeError $ "builtins.elemAt: index " <> Text.pack (show i) <>
+                                  " too large for list of length " <> Text.pack (show (V.listLength lst))
+    Just v' -> pure v'
 
 -- * Predicates
 
@@ -135,24 +125,18 @@ anyNix
   -> NValue t f m
   -> m (NValue t f m)
 anyNix f nvList = do
-  v <- V.demand nvList
-  case V.extractList v of
-    Nothing -> V.throwTypeError "builtins.any: second argument must be a list"
-    Just lst
-      | V.listNull lst -> pure V.internedFalse
-      | otherwise  -> do
-          -- Use foldr for short-circuit evaluation
-          result <- foldr
-            (\x acc -> do
-              r <- V.callFunc f x
-              r' <- V.demand r
-              case V.extractBool r' of
-                Just True -> pure True
-                Just False -> acc
-                Nothing -> V.throwTypeError "builtins.any: predicate must return a boolean")
-            (pure False)
-            lst
-          pure $ V.internedBool result
+  lst <- V.demandList "builtins.any" nvList
+  if V.listNull lst
+    then pure V.internedFalse
+    else do
+      -- Use foldr for short-circuit evaluation
+      result <- foldr
+        (\x acc -> do
+          b <- V.demandBool "builtins.any" =<< V.callFunc f x
+          if b then pure True else acc)
+        (pure False)
+        lst
+      pure $ V.internedBool result
 
 -- | Short-circuit evaluation: returns False as soon as any element fails the predicate.
 allNix
@@ -161,23 +145,17 @@ allNix
   -> NValue t f m
   -> m (NValue t f m)
 allNix f nvList = do
-  v <- V.demand nvList
-  case V.extractList v of
-    Nothing -> V.throwTypeError "builtins.all: second argument must be a list"
-    Just lst
-      | V.listNull lst -> pure V.internedTrue
-      | otherwise  -> do
-          result <- foldr
-            (\x acc -> do
-              r <- V.callFunc f x
-              r' <- V.demand r
-              case V.extractBool r' of
-                Just True -> acc
-                Just False -> pure False
-                Nothing -> V.throwTypeError "builtins.all: predicate must return a boolean")
-            (pure True)
-            lst
-          pure $ V.internedBool result
+  lst <- V.demandList "builtins.all" nvList
+  if V.listNull lst
+    then pure V.internedTrue
+    else do
+      result <- foldr
+        (\x acc -> do
+          b <- V.demandBool "builtins.all" =<< V.callFunc f x
+          if b then acc else pure False)
+        (pure True)
+        lst
+      pure $ V.internedBool result
 
 -- | Check if an element is in a list.
 elemNix
@@ -185,15 +163,13 @@ elemNix
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
-elemNix x lst = do
-  v <- V.demand lst
-  case V.extractList v of
-    Nothing -> V.throwTypeError "builtins.elem: second argument must be a list"
-    Just vec
-      | V.listNull vec -> pure V.internedFalse
-      | otherwise  -> do
-          result <- anyMVec (V.valueEq x) vec
-          pure $ V.internedBool result
+elemNix x nvList = do
+  vec <- V.demandList "builtins.elem" nvList
+  if V.listNull vec
+    then pure V.internedFalse
+    else do
+      result <- anyMVec (V.valueEq x) vec
+      pure $ V.internedBool result
  where
   anyMVec :: (a -> m Bool) -> NixList a -> m Bool
   anyMVec p v = go 0
@@ -216,14 +192,12 @@ mapNix
   -> NValue t f m
   -> m (NValue t f m)
 mapNix f nv = do
-  v <- V.demand nv
-  case V.extractList v of
-    Nothing -> V.throwTypeError "builtins.map: second argument must be a list"
-    Just lst
-      | V.listNull lst -> pure V.internedEmptyList
-      | otherwise  -> do
-          result <- traverse (V.defer . V.callFunc f) lst
-          pure $ V.mkList result
+  lst <- V.demandList "builtins.map" nv
+  if V.listNull lst
+    then pure V.internedEmptyList
+    else do
+      result <- traverse (V.defer . V.callFunc f) lst
+      pure $ V.mkList result
 
 -- | Filter a list by a predicate.
 filterNix
@@ -232,24 +206,17 @@ filterNix
   -> NValue t f m
   -> m (NValue t f m)
 filterNix f nv = do
-  v <- V.demand nv
-  case V.extractList v of
-    Nothing -> V.throwTypeError "builtins.filter: second argument must be a list"
-    Just lst
-      | V.listNull lst -> pure V.internedEmptyList
-      | otherwise  -> do
-          result <- V.listFilterM predicate lst
-          if V.listNull result
-            then pure V.internedEmptyList
-            else pure $ V.mkList result
+  lst <- V.demandList "builtins.filter" nv
+  if V.listNull lst
+    then pure V.internedEmptyList
+    else do
+      result <- V.listFilterM predicate lst
+      if V.listNull result
+        then pure V.internedEmptyList
+        else pure $ V.mkList result
  where
   predicate :: NValue t f m -> m Bool
-  predicate x = do
-    r <- V.callFunc f x
-    r' <- V.demand r
-    case V.extractBool r' of
-      Just b  -> pure b
-      Nothing -> V.throwTypeError "builtins.filter: predicate must return a boolean"
+  predicate x = V.demandBool "builtins.filter" =<< V.callFunc f x
 
 -- | Strict left fold over a list.
 foldl'Nix
@@ -259,10 +226,8 @@ foldl'Nix
   -> NValue t f m
   -> m (NValue t f m)
 foldl'Nix f z xs = do
-  v <- V.demand xs
-  case V.extractList v of
-    Nothing -> V.throwTypeError "builtins.foldl': third argument must be a list"
-    Just lst -> V.listFoldM' go z lst
+  lst <- V.demandList "builtins.foldl'" xs
+  V.listFoldM' go z lst
  where
   go b a = do
     f' <- V.callFunc f b
@@ -277,15 +242,14 @@ genListNix
   -> NValue t f m
   -> m (NValue t f m)
 genListNix f nixN = do
-  n' <- V.demand nixN
-  case V.extractInt n' of
-    Nothing -> V.throwTypeError "builtins.genList: second argument must be an integer"
-    Just n
-      | n < 0     -> V.throwTypeError $ "builtins.genList: expected a non-negative number, got " <> Text.pack (show n)
-      | n == 0    -> pure V.internedEmptyList
-      | otherwise -> do
-          result <- V.listGenListM (fromIntegral n) genElement
-          pure $ V.mkList result
+  n <- V.demandInt "builtins.genList" nixN
+  if n < 0
+    then V.throwTypeError $ "builtins.genList: expected a non-negative number, got " <> Text.pack (show n)
+    else if n == 0
+      then pure V.internedEmptyList
+      else do
+        result <- V.listGenListM (fromIntegral n) genElement
+        pure $ V.mkList result
  where
   genElement i = V.defer $ V.callFunc f (V.mkInt $ fromIntegral i)
 
@@ -297,23 +261,15 @@ concatListsNix
   => NValue t f m
   -> m (NValue t f m)
 concatListsNix nv = do
-  v <- V.demand nv
-  case V.extractList v of
-    Nothing -> V.throwTypeError "builtins.concatLists: argument must be a list"
-    Just outerLst
-      | V.listNull outerLst -> pure V.internedEmptyList
-      | otherwise       -> do
-          innerLists <- traverse extractInner outerLst
-          let result = fold innerLists
-          if V.listNull result
-            then pure V.internedEmptyList
-            else pure $ V.mkList result
- where
-  extractInner nv' = do
-    v' <- V.demand nv'
-    case V.extractList v' of
-      Just lst -> pure lst
-      Nothing  -> V.throwTypeError "builtins.concatLists: element is not a list"
+  outerLst <- V.demandList "builtins.concatLists" nv
+  if V.listNull outerLst
+    then pure V.internedEmptyList
+    else do
+      innerLists <- traverse (V.demandList "builtins.concatLists") outerLst
+      let result = fold innerLists
+      if V.listNull result
+        then pure V.internedEmptyList
+        else pure $ V.mkList result
 
 -- | Map and concatenate.
 concatMapNix
@@ -322,20 +278,12 @@ concatMapNix
   -> NValue t f m
   -> m (NValue t f m)
 concatMapNix f nv = do
-  v <- V.demand nv
-  case V.extractList v of
-    Nothing -> V.throwTypeError "builtins.concatMap: second argument must be a list"
-    Just outerLst
-      | V.listNull outerLst -> pure V.internedEmptyList
-      | otherwise       -> do
-          innerLists <- traverse (\x -> extractInner =<< V.callFunc f x) outerLst
-          let result = fold innerLists
-          if V.listNull result
-            then pure V.internedEmptyList
-            else pure $ V.mkList result
- where
-  extractInner nv' = do
-    v' <- V.demand nv'
-    case V.extractList v' of
-      Just lst -> pure lst
-      Nothing  -> V.throwTypeError "builtins.concatMap: function must return a list"
+  outerLst <- V.demandList "builtins.concatMap" nv
+  if V.listNull outerLst
+    then pure V.internedEmptyList
+    else do
+      innerLists <- traverse (\x -> V.demandList "builtins.concatMap" =<< V.callFunc f x) outerLst
+      let result = fold innerLists
+      if V.listNull result
+        then pure V.internedEmptyList
+        else pure $ V.mkList result

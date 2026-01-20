@@ -67,17 +67,12 @@ hasAttrNix
   -> NValue t f m
   -> m (NValue t f m)
 hasAttrNix x y = do
-  x' <- V.demand x
-  y' <- V.demand y
-  case V.extractStringNoContext x' of
-    Nothing -> V.throwTypeError "builtins.hasAttr: first argument must be a string"
-    Just keyText ->
-      case V.extractAttrSetRaw y' of
-        Nothing -> V.throwTypeError "builtins.hasAttr: second argument must be an attrset"
-        Just aset
-          -- Fast path: empty set always returns false
-          | V.attrSetNull aset -> pure V.internedFalse
-          | otherwise -> pure $ V.internedBool $ V.attrSetMember (mkVarName keyText) aset
+  keyText <- V.demandString "builtins.hasAttr" x
+  aset <- V.demandAttrSet "builtins.hasAttr" y
+  -- Fast path: empty set always returns false
+  if V.attrSetNull aset
+    then pure V.internedFalse
+    else pure $ V.internedBool $ V.attrSetMember (mkVarName keyText) aset
 
 -- | Get an attribute from a set.
 getAttrNix
@@ -86,17 +81,11 @@ getAttrNix
   -> NValue t f m
   -> m (NValue t f m)
 getAttrNix x y = do
-  x' <- V.demand x
-  y' <- V.demand y
-  case V.extractStringNoContext x' of
-    Nothing -> V.throwTypeError "builtins.getAttr: first argument must be a string"
-    Just keyText ->
-      case V.extractAttrSetRaw y' of
-        Nothing -> V.throwTypeError "builtins.getAttr: second argument must be an attrset"
-        Just aset ->
-          case V.attrSetLookup (mkVarName keyText) aset of
-            Nothing -> V.throwTypeError $ "builtins.getAttr: attribute '" <> keyText <> "' missing"
-            Just v -> pure v
+  keyText <- V.demandString "builtins.getAttr" x
+  aset <- V.demandAttrSet "builtins.getAttr" y
+  case V.attrSetLookup (mkVarName keyText) aset of
+    Nothing -> V.throwTypeError $ "builtins.getAttr: attribute '" <> keyText <> "' missing"
+    Just v -> pure v
 
 -- * Attribute queries
 
@@ -107,16 +96,14 @@ attrNamesNix
   => NValue t f m
   -> m (NValue t f m)
 attrNamesNix nvset = do
-  v <- V.demand nvset
-  case V.extractAttrSetRaw v of
-    Nothing -> V.throwTypeError "builtins.attrNames: argument must be an attrset"
-    Just attrs
-      | V.attrSetNull attrs -> pure V.internedEmptyList
-      | otherwise -> do
-          -- Get sorted keys and convert to string values
-          let sortedKeys = sort $ V.attrSetKeys attrs
-          let strings = map (V.mkStringNoContext . varNameText) sortedKeys
-          pure $ V.mkList $ V.listFromList strings
+  attrs <- V.demandAttrSet "builtins.attrNames" nvset
+  if V.attrSetNull attrs
+    then pure V.internedEmptyList
+    else do
+      -- Get sorted keys and convert to string values
+      let sortedKeys = sort $ V.attrSetKeys attrs
+      let strings = map (V.mkStringNoContext . varNameText) sortedKeys
+      pure $ V.mkList $ V.listFromList strings
 
 -- | Get attribute values from a set as a list.
 -- Fast path: returns interned empty list for empty set.
@@ -125,16 +112,14 @@ attrValuesNix
   => NValue t f m
   -> m (NValue t f m)
 attrValuesNix nvattrs = do
-  v <- V.demand nvattrs
-  case V.extractAttrSetRaw v of
-    Nothing -> V.throwTypeError "builtins.attrValues: argument must be an attrset"
-    Just attrs
-      | V.attrSetNull attrs -> pure V.internedEmptyList
-      | otherwise -> do
-          -- Get values sorted by key
-          let sortedPairs = sortOn fst $ V.attrSetToList attrs
-          let values = map snd sortedPairs
-          pure $ V.mkList $ V.listFromList values
+  attrs <- V.demandAttrSet "builtins.attrValues" nvattrs
+  if V.attrSetNull attrs
+    then pure V.internedEmptyList
+    else do
+      -- Get values sorted by key
+      let sortedPairs = sortOn fst $ V.attrSetToList attrs
+      let values = map snd sortedPairs
+      pure $ V.mkList $ V.listFromList values
 
 -- * Transformations
 
@@ -145,14 +130,12 @@ mapAttrsNix
   -> NValue t f m
   -> m (NValue t f m)
 mapAttrsNix f xs = do
-  xs' <- V.demand xs
-  case V.extractAttrSetRaw xs' of
-    Nothing -> V.throwTypeError "builtins.mapAttrs: second argument must be an attrset"
-    Just nixAttrset
-      | V.attrSetNull nixAttrset -> pure V.internedEmptySet
-      | otherwise -> do
-          result <- V.attrSetTraverseWithKey applyFunToKeyVal nixAttrset
-          pure $ V.mkSetRaw result
+  nixAttrset <- V.demandAttrSet "builtins.mapAttrs" xs
+  if V.attrSetNull nixAttrset
+    then pure V.internedEmptySet
+    else do
+      result <- V.attrSetTraverseWithKey applyFunToKeyVal nixAttrset
+      pure $ V.mkSetRaw result
  where
   applyFunToKeyVal key val =
     V.defer $ do
@@ -168,30 +151,23 @@ catAttrsNix
   -> NValue t f m
   -> m (NValue t f m)
 catAttrsNix attrName xs = do
-  attrName' <- V.demand attrName
-  xs' <- V.demand xs
-  case V.extractStringNoContext attrName' of
-    Nothing -> V.throwTypeError "builtins.catAttrs: first argument must be a string"
-    Just n ->
-      case V.extractList xs' of
-        Nothing -> V.throwTypeError "builtins.catAttrs: second argument must be a list"
-        Just v
-          | V.listNull v -> pure V.internedEmptyList
-          | otherwise -> do
-              -- Traverse the list, extracting the attribute from each attrset
-              let key = mkVarName n
-              maybeVals <- traverse (extractAttrFromSet key) v
-              let result = V.listFromList $ catMaybes $ V.listToList maybeVals
-              if V.listNull result
-                then pure V.internedEmptyList
-                else pure $ V.mkList result
+  n <- V.demandString "builtins.catAttrs" attrName
+  v <- V.demandList "builtins.catAttrs" xs
+  if V.listNull v
+    then pure V.internedEmptyList
+    else do
+      -- Traverse the list, extracting the attribute from each attrset
+      let key = mkVarName n
+      maybeVals <- traverse (extractAttrFromSet key) v
+      let result = V.listFromList $ catMaybes $ V.listToList maybeVals
+      if V.listNull result
+        then pure V.internedEmptyList
+        else pure $ V.mkList result
  where
   extractAttrFromSet :: VarName -> NValue t f m -> m (Maybe (NValue t f m))
   extractAttrFromSet key nv' = do
-    v' <- V.demand nv'
-    case V.extractAttrSetRaw v' of
-      Nothing -> V.throwTypeError "builtins.catAttrs: list element is not an attrset"
-      Just attrs -> pure $ V.attrSetLookup key attrs
+    attrs <- V.demandAttrSet "builtins.catAttrs" nv'
+    pure $ V.attrSetLookup key attrs
 
 -- * Set operations
 
@@ -203,27 +179,19 @@ removeAttrsNix
   -> NValue t f m
   -> m (NValue t f m)
 removeAttrsNix set v = do
-  set' <- V.demand set
-  v' <- V.demand v
-  case V.extractAttrSetRaw set' of
-    Nothing -> V.throwTypeError "builtins.removeAttrs: first argument must be an attrset"
-    Just m ->
-      case V.extractList v' of
-        Nothing -> V.throwTypeError "builtins.removeAttrs: second argument must be a list"
-        Just toRemoveList -> do
-          -- Extract string names from the list
-          toRemove <- traverse extractName toRemoveList
-          let resultAttrs = foldl' (flip V.attrSetDelete) m toRemove
-          if V.attrSetNull resultAttrs
-            then pure V.internedEmptySet
-            else pure $ V.mkSetRaw resultAttrs
+  m <- V.demandAttrSet "builtins.removeAttrs" set
+  toRemoveList <- V.demandList "builtins.removeAttrs" v
+  -- Extract string names from the list
+  toRemove <- traverse extractName toRemoveList
+  let resultAttrs = foldl' (flip V.attrSetDelete) m toRemove
+  if V.attrSetNull resultAttrs
+    then pure V.internedEmptySet
+    else pure $ V.mkSetRaw resultAttrs
  where
   extractName :: NValue t f m -> m VarName
   extractName nv' = do
-    v' <- V.demand nv'
-    case V.extractStringNoContext v' of
-      Nothing -> V.throwTypeError "builtins.removeAttrs: list element must be a string"
-      Just s -> pure $ mkVarName s
+    s <- V.demandString "builtins.removeAttrs" nv'
+    pure $ mkVarName s
 
 -- | Intersection of two attribute sets.
 intersectAttrsNix
@@ -232,20 +200,17 @@ intersectAttrsNix
   -> NValue t f m
   -> m (NValue t f m)
 intersectAttrsNix set1 set2 = do
-  set1' <- V.demand set1
-  set2' <- V.demand set2
-  case (V.extractAttrSetRaw set1', V.extractAttrSetRaw set2') of
-    (Nothing, _) -> V.throwTypeError "builtins.intersectAttrs: first argument must be an attrset"
-    (_, Nothing) -> V.throwTypeError "builtins.intersectAttrs: second argument must be an attrset"
-    (Just s1, Just s2)
-      -- Fast path: return interned empty set if either input is empty
-      | V.attrSetNull s1 || V.attrSetNull s2 -> pure V.internedEmptySet
-      | otherwise -> do
-          -- Intersection keeps values from s2 where keys exist in s1
-          let result = s2 `V.attrSetIntersection` s1
-          if V.attrSetNull result
-            then pure V.internedEmptySet
-            else pure $ V.mkSetRaw result
+  s1 <- V.demandAttrSet "builtins.intersectAttrs" set1
+  s2 <- V.demandAttrSet "builtins.intersectAttrs" set2
+  -- Fast path: return interned empty set if either input is empty
+  if V.attrSetNull s1 || V.attrSetNull s2
+    then pure V.internedEmptySet
+    else do
+      -- Intersection keeps values from s2 where keys exist in s1
+      let result = s2 `V.attrSetIntersection` s1
+      if V.attrSetNull result
+        then pure V.internedEmptySet
+        else pure $ V.mkSetRaw result
 
 -- * Construction
 
@@ -256,33 +221,25 @@ listToAttrsNix
   => NValue t f m
   -> m (NValue t f m)
 listToAttrsNix lst = do
-  lst' <- V.demand lst
-  case V.extractList lst' of
-    Nothing -> V.throwTypeError "builtins.listToAttrs: argument must be a list"
-    Just v
-      | V.listNull v -> pure V.internedEmptySet
-      | otherwise -> do
-          -- Build pairs in order
-          pairs <- traverse extractPair v
-          -- Use foldr' so first occurrence wins (Nix semantics)
-          let result = foldr' (uncurry V.attrSetInsert) V.attrSetEmpty pairs
-          pure $ V.mkSetRaw result
+  v <- V.demandList "builtins.listToAttrs" lst
+  if V.listNull v
+    then pure V.internedEmptySet
+    else do
+      -- Build pairs in order
+      pairs <- traverse extractPair v
+      -- Use foldr' so first occurrence wins (Nix semantics)
+      let result = foldr' (uncurry V.attrSetInsert) V.attrSetEmpty pairs
+      pure $ V.mkSetRaw result
  where
   extractPair :: NValue t f m -> m (VarName, NValue t f m)
   extractPair nv' = do
-    v' <- V.demand nv'
-    case V.extractAttrSetRaw v' of
-      Nothing -> V.throwTypeError "builtins.listToAttrs: list element must be an attrset"
-      Just a -> do
-        -- Get "name" attribute
-        case V.attrSetLookup (mkVarName "name") a of
-          Nothing -> V.throwTypeError "builtins.listToAttrs: element missing 'name' attribute"
-          Just nameNv -> do
-            nameV <- V.demand nameNv
-            case V.extractStringNoContext nameV of
-              Nothing -> V.throwTypeError "builtins.listToAttrs: 'name' must be a string"
-              Just nameText -> do
-                -- Get "value" attribute
-                case V.attrSetLookup (mkVarName "value") a of
-                  Nothing -> V.throwTypeError "builtins.listToAttrs: element missing 'value' attribute"
-                  Just val -> pure (mkVarName nameText, val)
+    a <- V.demandAttrSet "builtins.listToAttrs" nv'
+    -- Get "name" attribute
+    case V.attrSetLookup (mkVarName "name") a of
+      Nothing -> V.throwTypeError "builtins.listToAttrs: element missing 'name' attribute"
+      Just nameNv -> do
+        nameText <- V.demandString "builtins.listToAttrs" nameNv
+        -- Get "value" attribute
+        case V.attrSetLookup (mkVarName "value") a of
+          Nothing -> V.throwTypeError "builtins.listToAttrs: element missing 'value' attribute"
+          Just val -> pure (mkVarName nameText, val)

@@ -79,6 +79,12 @@ module Nix.Core.Value.Protocol
   , extractStringNoContext
   , extractAttrSet
   , extractAttrSetRaw
+    -- * Demand and extract (combined operations)
+  , demandList
+  , demandInt
+  , demandBool
+  , demandString
+  , demandAttrSet
     -- * Value construction
   , mkList
   , mkInt
@@ -182,6 +188,87 @@ extractAttrSetRaw :: NVConstraint f => NValue t f m -> Maybe (AttrSet (NValue t 
 extractAttrSetRaw (NVSet _ s) = Just s
 extractAttrSetRaw _           = Nothing
 {-# INLINE extractAttrSetRaw #-}
+
+-- * Demand and extract (combined operations)
+--
+-- These helpers combine 'demand' with extraction, throwing a type error
+-- on mismatch. They eliminate the common pattern:
+--
+-- @
+-- demand nv >>= \\v -> case extractList v of
+--   Just lst -> ...
+--   Nothing  -> throwTypeError "context: expected a list"
+-- @
+--
+-- Becomes:
+--
+-- @
+-- lst <- demandList "context" nv
+-- ...
+-- @
+
+-- | Demand and extract a list, throwing on type mismatch.
+--
+-- @
+-- lengthNix nv = do
+--   lst <- demandList "builtins.length" nv
+--   pure $ mkInt $ fromIntegral $ listLength lst
+-- @
+demandList
+  :: (MonadValue (NValue t f m) m, NVConstraint f, MonadThrow m)
+  => Text  -- ^ Context for error message (e.g., "builtins.length")
+  -> NValue t f m
+  -> m (NixList (NValue t f m))
+demandList ctx nv = demand nv >>= \v -> case extractList v of
+  Just lst -> pure lst
+  Nothing  -> throwTypeError $ ctx <> ": expected a list"
+{-# INLINE demandList #-}
+
+-- | Demand and extract an integer, throwing on type mismatch.
+demandInt
+  :: (MonadValue (NValue t f m) m, NVConstraint f, MonadThrow m)
+  => Text  -- ^ Context for error message
+  -> NValue t f m
+  -> m Integer
+demandInt ctx nv = demand nv >>= \v -> case extractInt v of
+  Just n  -> pure n
+  Nothing -> throwTypeError $ ctx <> ": expected an integer"
+{-# INLINE demandInt #-}
+
+-- | Demand and extract a boolean, throwing on type mismatch.
+demandBool
+  :: (MonadValue (NValue t f m) m, NVConstraint f, MonadThrow m)
+  => Text  -- ^ Context for error message
+  -> NValue t f m
+  -> m Bool
+demandBool ctx nv = demand nv >>= \v -> case extractBool v of
+  Just b  -> pure b
+  Nothing -> throwTypeError $ ctx <> ": expected a boolean"
+{-# INLINE demandBool #-}
+
+-- | Demand and extract a string without context, throwing on type mismatch.
+-- Note: Also fails if the string has context attached.
+demandString
+  :: (MonadValue (NValue t f m) m, NVConstraint f, MonadThrow m)
+  => Text  -- ^ Context for error message
+  -> NValue t f m
+  -> m Text
+demandString ctx nv = demand nv >>= \v -> case extractStringNoContext v of
+  Just s  -> pure s
+  Nothing -> throwTypeError $ ctx <> ": expected a string"
+{-# INLINE demandString #-}
+
+-- | Demand and extract an attribute set, throwing on type mismatch.
+-- Returns the raw AttrSet for direct operations.
+demandAttrSet
+  :: (MonadValue (NValue t f m) m, NVConstraint f, MonadThrow m)
+  => Text  -- ^ Context for error message
+  -> NValue t f m
+  -> m (AttrSet (NValue t f m))
+demandAttrSet ctx nv = demand nv >>= \v -> case extractAttrSetRaw v of
+  Just s  -> pure s
+  Nothing -> throwTypeError $ ctx <> ": expected an attrset"
+{-# INLINE demandAttrSet #-}
 
 -- * Value construction
 
