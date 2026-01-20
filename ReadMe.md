@@ -321,23 +321,24 @@ For simplicity `alias` the command in your shell.
 
 HNix uses GHC Backpack for compile-time swappable data structure implementations with guaranteed monomorphization (no dictionary passing at runtime).
 
-### Package Structure
+All Backpack components are organized as **named sublibraries** within `hnix.cabal`.
 
-| Package | Purpose |
-|---------|---------|
+### Sublibrary Structure
+
+| Sublibrary | Purpose |
+|------------|---------|
 | `hnix-types` | Shared fundamental types (Path, VarName, SourcePos, Atom) |
 | `hnix-attrset-sig` | Backpack signature for AttrSet operations |
 | `hnix-list-sig` | Backpack signature for NixList operations |
 | `hnix-string-sig` | Backpack signature for NixString operations |
-| `hnix-attrset-hashmap` | HashMap-backed AttrSet implementation |
-| `hnix-list-vector` | Vector-backed NixList implementation |
-| `hnix-string-text` | Text-backed NixString implementation |
-| `hnix-value-core` | Core value types (indefinite package) |
-| `hnix-builtins-list` | List builtins (indefinite package) |
-| `hnix-builtins-attrset` | AttrSet builtins (indefinite package) |
-| `hnix-builtins-string` | String builtins (indefinite package) |
+| `hnix-attrset` | HashMap-backed AttrSet implementation |
+| `hnix-list` | Vector-backed NixList implementation |
+| `hnix-string` | Text-backed NixString implementation |
+| `hnix-core` | Core types and value system (indefinite) |
+| `hnix-builtins-list` | List builtins (indefinite) |
+| `hnix-builtins-attrset` | AttrSet builtins (indefinite) |
 
-The main `hnix` package instantiates these signatures via Cabal mixins, selecting the concrete implementations.
+The main library instantiates these signatures via Cabal mixins, selecting the concrete implementations.
 
 For detailed information about the Backpack architecture, goals, and how to add alternative implementations, see [doc/backpack-architecture.md](doc/backpack-architecture.md).
 

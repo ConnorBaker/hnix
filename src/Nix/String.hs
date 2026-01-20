@@ -6,7 +6,7 @@
 -- to ensure proper dependency tracking.
 --
 -- The concrete implementation uses 'Data.Text.Text' for string content and
--- 'Data.HashSet.HashSet' for context tracking (from hnix-string-text).
+-- 'Data.HashSet.HashSet' for context tracking (from the hnix-string sublibrary).
 module Nix.String
   ( -- * Core types (from Nix.String.Text)
     NixString

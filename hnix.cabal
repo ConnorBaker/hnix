@@ -1,4 +1,4 @@
-cabal-version:  3.0
+cabal-version:  3.4
 name:           hnix
 version:        0.17.0
 synopsis:       Haskell implementation of the Nix language
@@ -333,6 +333,10 @@ flag strict
   manual: True
   default: True
 
+-- ═══════════════════════════════════════════════════════════════════════════
+-- COMMON STANZAS
+-- ═══════════════════════════════════════════════════════════════════════════
+
 common shared
   default-language: Haskell2010
   default-extensions:
@@ -386,46 +390,322 @@ common shared
     default-extensions:
       Strict
 
+-- Minimal common stanza for sublibraries (less dependencies)
+common shared-sublibrary
+  default-language: Haskell2010
+  default-extensions:
+      NoImplicitPrelude
+    , OverloadedStrings
+    , DeriveGeneric
+    , DeriveDataTypeable
+    , DeriveFunctor
+    , DeriveFoldable
+    , DeriveTraversable
+    , DeriveLift
+    , FlexibleContexts
+    , FlexibleInstances
+    , ScopedTypeVariables
+    , StandaloneDeriving
+    , TypeApplications
+    , TypeSynonymInstances
+    , InstanceSigs
+    , MultiParamTypeClasses
+    , TupleSections
+    , LambdaCase
+    , BangPatterns
+    , ViewPatterns
+  ghc-options:
+    -Wall
+    -Wno-incomplete-uni-patterns
+  if flag(strict)
+    default-extensions:
+      Strict
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- FOUNDATIONAL SUBLIBRARY
+-- ═══════════════════════════════════════════════════════════════════════════
+
+library hnix-types
+  import: shared-sublibrary
+  visibility: public
+  hs-source-dirs: types
+  exposed-modules:
+    Nix.Types.Atom
+    Nix.Types.Path
+    Nix.Types.SourcePos
+    Nix.Types.VarName
+  build-depends:
+      base >= 4.12 && < 5
+    , aeson >= 2.0
+    , binary >= 0.8.5
+    , data-default-class >= 0.1.2
+    , deepseq >= 1.4.3
+    , filepath >= 1.4.2
+    , hashable >= 1.2.5
+    , megaparsec >= 7.0
+    , relude >= 1.0.0
+    , serialise >= 0.2.1
+    , symbolize >= 1.0.0
+    , template-haskell >= 2.13
+    , text >= 1.2.3
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- SIGNATURE SUBLIBRARIES
+-- ═══════════════════════════════════════════════════════════════════════════
+
+library hnix-attrset-sig
+  import: shared-sublibrary
+  visibility: public
+  signatures: Nix.AttrSet.Sig
+  hs-source-dirs: signatures
+  build-depends:
+      base >= 4.12 && < 5
+    , hnix:hnix-types
+    , aeson >= 2.0
+    , binary >= 0.8
+    , deepseq >= 1.4.3
+    , hashable >= 1.3.0
+    , indexed-traversable >= 0.1.1
+    , semialign >= 1.2
+    , serialise >= 0.2
+
+library hnix-list-sig
+  import: shared-sublibrary
+  visibility: public
+  signatures: Nix.List.Sig
+  hs-source-dirs: signatures
+  build-depends:
+      base >= 4.12 && < 5
+    , deepseq >= 1.4.3
+    , hashable >= 1.3.0
+    , semialign >= 1.2
+
+library hnix-string-sig
+  import: shared-sublibrary
+  visibility: public
+  signatures: Nix.String.Sig
+  hs-source-dirs: signatures
+  build-depends:
+      base >= 4.12 && < 5
+    , hnix:hnix-types
+    , deepseq >= 1.4.3
+    , hashable >= 1.3.0
+    , text >= 1.2
+    , unordered-containers >= 0.2.14
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- IMPLEMENTATION SUBLIBRARIES
+-- ═══════════════════════════════════════════════════════════════════════════
+
+library hnix-attrset
+  import: shared-sublibrary
+  visibility: public
+  hs-source-dirs: implementations/attrset
+  exposed-modules: Nix.AttrSet.HashMap
+  build-depends:
+      base >= 4.12 && < 5
+    , hnix:hnix-types
+    , aeson >= 2.0
+    , binary >= 0.8
+    , deepseq >= 1.4.3
+    , hashable >= 1.3.0
+    , indexed-traversable >= 0.1.1
+    , relude >= 1.0.0
+    , semialign >= 1.2
+    , serialise >= 0.2
+    , template-haskell >= 2.12
+    , unordered-containers >= 0.2.14
+
+-- Internal library for list (no unfilled signatures)
+library hnix-list-internal
+  import: shared-sublibrary
+  visibility: private
+  hs-source-dirs: implementations/list
+  exposed-modules: Nix.List.Vector
+  build-depends:
+      base >= 4.12 && < 5
+    , deepseq >= 1.4.3
+    , hashable >= 1.3.0
+    , relude >= 1.0.0
+    , semialign >= 1.2
+    , these >= 1.1
+    , vector >= 0.12.0
+
+-- Public library for list (re-exports internal, no signatures needed)
+library hnix-list
+  import: shared-sublibrary
+  visibility: public
+  reexported-modules: Nix.List.Vector
+  build-depends:
+      base >= 4.12 && < 5
+    , hnix:hnix-list-internal
+
+-- Internal library for string (no unfilled signatures)
+library hnix-string-internal
+  import: shared-sublibrary
+  visibility: private
+  hs-source-dirs: implementations/string
+  exposed-modules:
+    Nix.String.Text
+    Nix.String.Text.Context
+  build-depends:
+      base >= 4.12 && < 5
+    , hnix:hnix-types
+    , deepseq >= 1.4.3
+    , hashable >= 1.3.0
+    , mtl >= 2.2.2
+    , relude >= 1.0.0
+    , text >= 1.2
+    , unordered-containers >= 0.2.14
+
+-- Public library for string (has unfilled AttrSet.Sig for NixLike)
+library hnix-string
+  import: shared-sublibrary
+  visibility: public
+  hs-source-dirs: implementations/string-public
+  signatures: Nix.AttrSet.Sig
+  exposed-modules: Nix.String.Text.NixLike
+  reexported-modules:
+    Nix.String.Text
+    , Nix.String.Text.Context
+  build-depends:
+      base >= 4.12 && < 5
+    , hnix:hnix-types
+    , hnix:hnix-attrset-sig
+    , hnix:hnix-string-internal
+    , deepseq >= 1.4.3
+    , hashable >= 1.3.0
+    , relude >= 1.0.0
+    , text >= 1.2
+    , unordered-containers >= 0.2.14
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- INDEFINITE SUBLIBRARIES (require signature instantiation)
+-- ═══════════════════════════════════════════════════════════════════════════
+
+-- Merged hnix-core: contains both core types AND value system
+library hnix-core
+  import: shared-sublibrary
+  visibility: public
+  hs-source-dirs: core
+  signatures:
+    Nix.AttrSet.Sig
+    Nix.List.Sig
+    Nix.String.Sig
+  exposed-modules:
+    -- Core types and utilities
+    Nix.Core.AttrSet
+    Nix.Core.List
+    Nix.Core.Expr.Types
+    Nix.Core.Scope
+    Nix.Core.Utils
+    -- Value system (from hnix-value-core, renamed)
+    Nix.Core.Value
+    Nix.Core.Value.Equal
+    Nix.Core.Value.Frames
+    Nix.Core.Value.Interned
+    Nix.Core.Value.Monad
+    Nix.Core.Value.Protocol
+    Nix.Core.Value.String
+    Nix.Core.Value.Thunk
+    Nix.Core.Value.Thunk.Basic
+  build-depends:
+      base >= 4.12 && < 5
+    , hnix:hnix-types
+    , hnix:hnix-attrset-sig
+    , hnix:hnix-list-sig
+    , hnix:hnix-string-sig
+    , aeson >= 1.4.2
+    , comonad >= 5.0.8
+    , deepseq >= 1.4.3
+    , exceptions >= 0.10.0
+    , free >= 5.1
+    , hashable >= 1.2.5
+    , lens-family >= 1.2.2
+    , lens-family-core >= 1.2.2
+    , lens-family-th >= 0.5.0.2
+    , mtl >= 2.2.2
+    , ref-tf >= 0.5
+    , reflection >= 2.1.6
+    , relude >= 1.0.0
+    , semialign >= 1.2
+    , text >= 1.2.3
+    , these >= 1.1
+    , transformers >= 0.5.5
+    , unordered-containers >= 0.2.14
+
+library hnix-builtins-list
+  import: shared-sublibrary
+  visibility: public
+  hs-source-dirs: builtins/list
+  default-extensions:
+    ConstraintKinds
+    AllowAmbiguousTypes
+  signatures:
+    Nix.AttrSet.Sig
+    Nix.List.Sig
+    Nix.String.Sig
+  exposed-modules: Nix.Builtins.List
+  build-depends:
+      base >= 4.12 && < 5
+    , hnix:hnix-types
+    , hnix:hnix-attrset-sig
+    , hnix:hnix-list-sig
+    , hnix:hnix-string-sig
+    , hnix:hnix-core
+    , exceptions >= 0.10.0
+    , relude >= 1.0.0
+    , text >= 1.2
+  ghc-options:
+    -Wno-name-shadowing
+
+library hnix-builtins-attrset
+  import: shared-sublibrary
+  visibility: public
+  hs-source-dirs: builtins/attrset
+  default-extensions:
+    ConstraintKinds
+    AllowAmbiguousTypes
+  signatures:
+    Nix.AttrSet.Sig
+    Nix.List.Sig
+    Nix.String.Sig
+  exposed-modules: Nix.Builtins.AttrSet
+  build-depends:
+      base >= 4.12 && < 5
+    , hnix:hnix-types
+    , hnix:hnix-attrset-sig
+    , hnix:hnix-list-sig
+    , hnix:hnix-string-sig
+    , hnix:hnix-core
+    , exceptions >= 0.10.0
+    , relude >= 1.0.0
+    , text >= 1.2
+  ghc-options:
+    -Wno-name-shadowing
+
+-- ═══════════════════════════════════════════════════════════════════════════
+-- MAIN LIBRARY (instantiates all signatures via mixins)
+-- ═══════════════════════════════════════════════════════════════════════════
+
 library
   import: shared
-  -- Backpack instantiation: hnix-core uses abstract AttrSet and NixList
-  -- which we instantiate with HashMap and Vector implementations.
-  --
-  -- NOTE: hnix-list-vector also provides Nix.List.Vector.Builtins, but
-  -- those builtins require Nix.Value.Protocol. Due to Backpack's cycle
-  -- restrictions, we cannot satisfy that requirement from this library
-  -- (it would create a cycle). For now, builtins remain in Nix.Builtins.List.
-  -- A future refactoring could move the value infrastructure to a separate
-  -- package to enable swappable builtins.
   -- Backpack mixins: instantiate all indefinite packages with concrete implementations.
-  -- - hnix-core uses signatures for AttrSet and NixList
-  -- - hnix-value-core uses signatures for AttrSet and NixList
-  -- - hnix-list-vector uses signature for AttrSet (NixList is its own implementation)
   mixins:
-    hnix-core
-      requires
-        (Nix.AttrSet.Sig as Nix.AttrSet.HashMap,
-         Nix.List.Sig as Nix.List.Vector),
-    hnix-value-core
+    hnix:hnix-core
       requires
         (Nix.AttrSet.Sig as Nix.AttrSet.HashMap,
          Nix.List.Sig as Nix.List.Vector,
          Nix.String.Sig as Nix.String.Text),
-    hnix-list-vector
+    hnix:hnix-string
       requires
         (Nix.AttrSet.Sig as Nix.AttrSet.HashMap),
-    hnix-string-text
-      requires
-        (Nix.AttrSet.Sig as Nix.AttrSet.HashMap),
-    -- Instantiate builtins packages with concrete implementations
-    -- hnix-builtins-list requires Nix.List.Sig (and AttrSet.Sig transitively from hnix-value-core)
-    -- hnix-builtins-attrset requires Nix.AttrSet.Sig (and List.Sig transitively from hnix-value-core)
-    hnix-builtins-list
+    hnix:hnix-builtins-list
       requires
         (Nix.AttrSet.Sig as Nix.AttrSet.HashMap,
          Nix.List.Sig as Nix.List.Vector,
          Nix.String.Sig as Nix.String.Text),
-    hnix-builtins-attrset
+    hnix:hnix-builtins-attrset
       requires
         (Nix.AttrSet.Sig as Nix.AttrSet.HashMap,
          Nix.List.Sig as Nix.List.Vector,
@@ -509,16 +789,14 @@ library
   build-depends:
       aeson >= 2.0
     , array >= 0.4
-    -- Backpack packages for abstract data structures
-    , hnix-types
-    , hnix-core
-    , hnix-value-core
-    , hnix-attrset-hashmap
-    , hnix-list-vector
-    , hnix-string-text
-    -- Backpack builtins packages (instantiated via mixins)
-    , hnix-builtins-list
-    , hnix-builtins-attrset
+    -- Sublibraries (implementations provide modules, indefinite packages get instantiated via mixins)
+    , hnix:hnix-types
+    , hnix:hnix-attrset
+    , hnix:hnix-list
+    , hnix:hnix-string
+    , hnix:hnix-core
+    , hnix:hnix-builtins-list
+    , hnix:hnix-builtins-attrset
     , base16-bytestring >= 0.1.1
     , binary >= 0.8.5
     , bytestring >= 0.10.8

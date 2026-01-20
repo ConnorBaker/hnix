@@ -39,64 +39,102 @@ monomorphized. There's no risk of accidentally losing specialization.
 
 ## Architecture Overview
 
+All Backpack components are organized as **named sublibraries** within the single
+`hnix.cabal` file. This simplifies versioning, reduces maintenance overhead, and
+keeps all related code together.
+
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                              SIGNATURE LAYER                                │
-│         (Abstract interfaces - no concrete implementation)                  │
-├───────────────────┬───────────────────┬─────────────────────────────────────┤
-│  hnix-list-sig    │  hnix-attrset-sig │  hnix-string-sig                    │
-│  Nix.List.Sig     │  Nix.AttrSet.Sig  │  Nix.String.Sig                     │
-│                   │                   │                                     │
-│  data NixList a   │  data AttrSet v   │  data NixString                     │
-│  length, head,    │  lookup, insert,  │  mkNixString, ignoreContext,        │
-│  tail, elemAt,    │  delete, union,   │  hasContext, getStringContext,      │
-│  fromList, etc.   │  keys, etc.       │  StringContext, ContextFlavor       │
-└─────────┬─────────┴─────────┬─────────┴──────────────────┬──────────────────┘
-          │                   │                            │
-          ▼                   ▼                            ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           IMPLEMENTATION LAYER                              │
-│              (Concrete implementations satisfying signatures)               │
-├───────────────────┬───────────────────┬─────────────────────────────────────┤
-│ hnix-list-vector  │hnix-attrset-      │  hnix-string-text                   │
-│                   │    hashmap        │                                     │
-│ NixList = Vector  │ AttrSet = HashMap │  NixString = Text + HashSet Context │
-│                   │                   │                                     │
-│ O(1) length/index │ O(1) avg lookup   │  Context tracking for store paths   │
-└─────────┬─────────┴─────────┬─────────┴──────────────────┬──────────────────┘
-          │                   │                            │
-          ▼                   ▼                            ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                          INDEFINITE PACKAGES                                │
-│     (Use signatures - not directly usable, require instantiation)           │
+│                         SUBLIBRARIES IN hnix.cabal                          │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│  hnix-value-core          Core NValue types, thunks, evaluation protocol    │
-│  hnix-builtins-list       List builtins: length, head, map, filter, etc.    │
-│  hnix-builtins-attrset    AttrSet builtins: hasAttr, getAttr, mapAttrs      │
-│  hnix-builtins-string     String builtins: hashString, substring, etc.      │
-│  hnix-core                Expression types, scope, utilities                │
-└─────────────────────────────────────────────────────────────────────────────┘
-          │
-          │ Cabal mixins instantiate signatures with implementations
-          ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              MAIN HNIX PACKAGE                              │
 │                                                                             │
-│  mixins:                                                                    │
-│    hnix-value-core requires (Nix.List.Sig as Nix.List.Vector,               │
-│                              Nix.AttrSet.Sig as Nix.AttrSet.HashMap,        │
-│                              Nix.String.Sig as Nix.String.Text)             │
-│    hnix-builtins-list requires (...)                                        │
-│    hnix-builtins-attrset requires (...)                                     │
-│    hnix-builtins-string requires (...)                                      │
+│  ┌─────────────────┐                                                        │
+│  │   hnix-types    │  Shared types (VarName, Path, SourcePos, Atom)        │
+│  └────────┬────────┘                                                        │
+│           │                                                                 │
+│  ┌────────▼────────┬─────────────────┬─────────────────┐                   │
+│  │ hnix-attrset-sig│  hnix-list-sig  │ hnix-string-sig │  SIGNATURES       │
+│  │   (.hsig only)  │   (.hsig only)  │   (.hsig only)  │                   │
+│  └────────┬────────┴────────┬────────┴────────┬────────┘                   │
+│           │                 │                 │                             │
+│  ┌────────▼────────┬────────▼────────┬────────▼────────┐                   │
+│  │  hnix-attrset   │   hnix-list     │   hnix-string   │  IMPLEMENTATIONS  │
+│  │   (hashmap)     │ (vector+intern) │ (text+internal) │                   │
+│  └────────┬────────┴────────┬────────┴────────┬────────┘                   │
+│           │                 │                 │                             │
+│  ┌────────▼─────────────────▼─────────────────▼────────┐                   │
+│  │                      hnix-core                       │  INDEFINITE       │
+│  │       (requires AttrSet.Sig, List.Sig, String.Sig)   │  (merged)         │
+│  │                                                      │                   │
+│  │   Nix.Core.AttrSet, List, Scope, Expr.Types          │                   │
+│  │   Nix.Core.Value.*, Thunk.*, Protocol, Frames...     │                   │
+│  └────────────────────────┬────────────────────────────┘                   │
+│                           │                                                 │
+│  ┌────────────────────────▼────────────────────────────┐                   │
+│  │     hnix-builtins-list    hnix-builtins-attrset     │  INDEFINITE       │
+│  └────────────────────────┬────────────────────────────┘                   │
+│                           │                                                 │
+│  ┌────────────────────────▼────────────────────────────┐                   │
+│  │                    library (main)                    │  INSTANTIATES ALL │
+│  │              via mixins + reexported-modules         │                   │
+│  └─────────────────────────────────────────────────────┘                   │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Package Details
+## Directory Structure
 
-### Signature Packages
+```
+hnix/
+├── hnix.cabal                    # All sublibraries defined here
+├── types/                        # hnix-types sublibrary
+│   └── Nix/Types/
+│       ├── Atom.hs
+│       ├── Path.hs
+│       ├── SourcePos.hs
+│       └── VarName.hs
+├── signatures/                   # Signature sublibraries (.hsig files)
+│   └── Nix/
+│       ├── AttrSet/Sig.hsig
+│       ├── List/Sig.hsig
+│       └── String/Sig.hsig
+├── implementations/              # Implementation sublibraries
+│   ├── attrset/                  # hnix-attrset (HashMap)
+│   │   └── Nix/AttrSet/HashMap.hs
+│   ├── list/                     # hnix-list-internal (Vector)
+│   │   └── Nix/List/Vector.hs
+│   ├── string/                   # hnix-string-internal (Text)
+│   │   └── Nix/String/Text.hs
+│   │   └── Nix/String/Text/Context.hs
+│   └── string-public/            # hnix-string (NixLike)
+│       └── Nix/String/Text/NixLike.hs
+├── core/                         # hnix-core (merged core + value)
+│   └── Nix/Core/
+│       ├── AttrSet.hs
+│       ├── List.hs
+│       ├── Scope.hs
+│       ├── Utils.hs
+│       ├── Expr/Types.hs
+│       └── Value/
+│           ├── Equal.hs
+│           ├── Frames.hs
+│           ├── Interned.hs
+│           ├── Monad.hs
+│           ├── Protocol.hs
+│           ├── String.hs
+│           └── Thunk/Basic.hs
+├── builtins/                     # Builtin sublibraries
+│   ├── list/                     # hnix-builtins-list
+│   │   └── Nix/Builtins/List.hs
+│   └── attrset/                  # hnix-builtins-attrset
+│       └── Nix/Builtins/AttrSet.hs
+└── src/                          # Main library sources
+```
 
-Signature packages define abstract interfaces using GHC's `.hsig` files.
+## Sublibrary Details
+
+### Signature Sublibraries
+
+Signature sublibraries define abstract interfaces using GHC's `.hsig` files.
 
 #### hnix-list-sig
 
@@ -177,27 +215,11 @@ isDerivationOutput :: ContextFlavor -> Bool
 uses smart constructors (`mkDirectPath`, etc.) and predicates (`isDirectPath`, etc.)
 instead.
 
-### Implementation Packages
+### Implementation Sublibraries
 
-Implementation packages provide concrete types that satisfy signatures.
+Implementation sublibraries provide concrete types that satisfy signatures.
 
-#### hnix-list-vector
-
-Vector-backed list implementation:
-
-```haskell
-newtype NixList a = NixList (Vector a)
-
-length (NixList v) = V.length v      -- O(1)
-elemAt (NixList v) i = v V.!? i      -- O(1)
-head (NixList v) = v V.!? 0          -- O(1)
-tail (NixList v) = NixList <$> ...   -- O(1), shares memory
-```
-
-**Why Vector?** Nix semantics require frequent length checks and random access
-(e.g., `builtins.elemAt`, `builtins.length`). Vector provides O(1) for both.
-
-#### hnix-attrset-hashmap
+#### hnix-attrset (HashMap)
 
 HashMap-backed attribute set implementation:
 
@@ -211,9 +233,25 @@ insert k v (AttrSet m) = AttrSet (HM.insert k v m)
 **Why HashMap?** Attribute access is the most common operation in Nix evaluation.
 HashMap provides O(1) average case for lookups.
 
-#### hnix-string-text
+#### hnix-list (Vector)
 
-Text-backed string with HashSet context:
+Vector-backed list implementation (via `hnix-list-internal`):
+
+```haskell
+newtype NixList a = NixList (Vector a)
+
+length (NixList v) = V.length v      -- O(1)
+elemAt (NixList v) i = v V.!? i      -- O(1)
+head (NixList v) = v V.!? 0          -- O(1)
+tail (NixList v) = NixList <$> ...   -- O(1), shares memory
+```
+
+**Why Vector?** Nix semantics require frequent length checks and random access
+(e.g., `builtins.elemAt`, `builtins.length`). Vector provides O(1) for both.
+
+#### hnix-string (Text)
+
+Text-backed string with HashSet context (via `hnix-string-internal`):
 
 ```haskell
 data NixString = NixStringInternal !(HashSet StringContext) !Text
@@ -226,22 +264,28 @@ data ContextFlavor
   | DerivationOutput Text
 ```
 
-### Indefinite Packages
+**Internal library pattern**: `hnix-list` and `hnix-string` use a two-tier structure:
+- **Internal** (`hnix-list-internal`, `hnix-string-internal`): Core implementation
+  with no unfilled signatures
+- **Public** (`hnix-list`, `hnix-string`): Re-exports internal modules, may have
+  additional modules that require signature instantiation
 
-Indefinite packages depend on signatures but don't provide implementations.
+### Indefinite Sublibraries
+
+Indefinite sublibraries depend on signatures but don't provide implementations.
 They can't be used directly - they must be instantiated via mixins.
 
-#### hnix-value-core
+#### hnix-core
 
-Core value infrastructure:
+Core infrastructure (merged from former `hnix-core` and `hnix-value-core`):
 
-- `Nix.Value.Core.Value` - NValue type and pattern synonyms
-- `Nix.Value.Core.Thunk` - Thunk types and operations
-- `Nix.Value.Core.Protocol` - Abstract interface for builtins
-- `Nix.Value.Core.String` - Re-exports string signature
-- `Nix.Value.Core.Interned` - Singleton interned values (empty list, true, false)
+- `Nix.Core.AttrSet` - Re-exports from AttrSet.Sig
+- `Nix.Core.List` - Re-exports from List.Sig
+- `Nix.Core.Scope` - Scope type for variable bindings
+- `Nix.Core.Expr.Types` - PositionSet, ParamSet
+- `Nix.Core.Value.*` - NValue types, thunks, protocols, frames
 
-#### hnix-builtins-{list,attrset,string}
+#### hnix-builtins-{list,attrset}
 
 Builtin functions implemented against the abstract protocol:
 
@@ -256,63 +300,86 @@ lengthNix nv = do
 ```
 
 These builtins use the abstract `V.listLength`, `V.extractList`, etc. from
-`Nix.Value.Core.Protocol`, which re-exports operations from the signatures.
+`Nix.Core.Value.Protocol`, which re-exports operations from the signatures.
 
 ## How Instantiation Works
 
-The main `hnix` package uses Cabal mixins to instantiate signatures:
+The main library uses Cabal mixins to instantiate signatures:
 
 ```cabal
 library
   build-depends:
-    , hnix-value-core
-    , hnix-builtins-list
-    , hnix-list-vector
-    , hnix-attrset-hashmap
-    , hnix-string-text
-    -- ...
+    -- Sublibraries
+    , hnix:hnix-types
+    , hnix:hnix-attrset
+    , hnix:hnix-list
+    , hnix:hnix-string
+    , hnix:hnix-core
+    , hnix:hnix-builtins-list
+    , hnix:hnix-builtins-attrset
 
   mixins:
-    hnix-value-core
-      requires (Nix.List.Sig as Nix.List.Vector,
-                Nix.AttrSet.Sig as Nix.AttrSet.HashMap,
-                Nix.String.Sig as Nix.String.Text),
-    hnix-builtins-list
-      requires (Nix.List.Sig as Nix.List.Vector,
-                Nix.String.Sig as Nix.String.Text),
-    -- ...
+    hnix:hnix-core
+      requires
+        (Nix.AttrSet.Sig as Nix.AttrSet.HashMap,
+         Nix.List.Sig as Nix.List.Vector,
+         Nix.String.Sig as Nix.String.Text),
+    hnix:hnix-string
+      requires
+        (Nix.AttrSet.Sig as Nix.AttrSet.HashMap),
+    hnix:hnix-builtins-list
+      requires
+        (Nix.AttrSet.Sig as Nix.AttrSet.HashMap,
+         Nix.List.Sig as Nix.List.Vector,
+         Nix.String.Sig as Nix.String.Text),
+    hnix:hnix-builtins-attrset
+      requires
+        (Nix.AttrSet.Sig as Nix.AttrSet.HashMap,
+         Nix.List.Sig as Nix.List.Vector,
+         Nix.String.Sig as Nix.String.Text)
 ```
 
-When GHC compiles the main package, it:
+When GHC compiles the main library, it:
 
-1. Sees `Nix.List.Sig as Nix.List.Vector`
-2. Verifies `Nix.List.Vector` satisfies the `Nix.List.Sig` signature
-3. Substitutes all uses of `NixList` with `Vector`
+1. Sees `Nix.AttrSet.Sig as Nix.AttrSet.HashMap`
+2. Verifies `Nix.AttrSet.HashMap` satisfies the `Nix.AttrSet.Sig` signature
+3. Substitutes all uses of `AttrSet` with `HashMap`
 4. Monomorphizes all operations - no indirection remains
 
 ## Adding a New Implementation
 
 To add an alternative implementation (e.g., `hnix-list-seq` using `Data.Seq`):
 
-### 1. Create the implementation package
+### 1. Create the implementation sublibrary
 
-```
-implementations/hnix-list-seq/
-├── hnix-list-seq.cabal
-└── src/Nix/List/Seq.hs
+Add a new sublibrary to `hnix.cabal`:
+
+```cabal
+library hnix-list-seq
+  import: shared-sublibrary
+  visibility: public
+  hs-source-dirs: implementations/list-seq
+  exposed-modules: Nix.List.Seq
+  build-depends:
+      base >= 4.12 && < 5
+    , containers
+    , deepseq
+    , hashable
+    , semialign
 ```
 
 ### 2. Implement the signature
 
+Create `implementations/list-seq/Nix/List/Seq.hs`:
+
 ```haskell
--- src/Nix/List/Seq.hs
 module Nix.List.Seq
   ( NixList
   , empty, length, elemAt, head, tail, fromList, toList
   -- ... all operations from Nix.List.Sig
   ) where
 
-import qualified Data.Seq as S
+import qualified Data.Sequence as S
 
 newtype NixList a = NixList (S.Seq a)
 
@@ -321,21 +388,36 @@ elemAt (NixList s) i = S.lookup i s
 -- ...
 ```
 
-### 3. Add to cabal.project
+### 3. Use in mixins (for testing/benchmarking)
+
+Create a test or benchmark that uses the alternative implementation:
 
 ```cabal
-packages:
-  implementations/hnix-list-seq
+test-suite bench-seq-list
+  mixins:
+    hnix:hnix-core
+      requires (Nix.List.Sig as Nix.List.Seq, ...)
 ```
 
-### 4. Use in mixins (for testing)
+## Building Sublibraries
 
-```cabal
--- In a test package or benchmark
-mixins:
-  hnix-value-core
-    requires (Nix.List.Sig as Nix.List.Seq, ...)
+All sublibraries are built as part of the main `hnix` package:
+
+```bash
+# Build everything (recommended)
+nix develop ".?submodules=1#" --command cabal build
+
+# Build a specific sublibrary
+nix develop ".?submodules=1#" --command cabal build hnix:hnix-types
+nix develop ".?submodules=1#" --command cabal build hnix:hnix-core
+nix develop ".?submodules=1#" --command cabal build hnix:hnix-attrset
+
+# Build the main library (instantiates all signatures)
+nix develop ".?submodules=1#" --command cabal build lib:hnix
 ```
+
+Note the `hnix:sublibrary-name` syntax for referencing sublibraries within the
+same package.
 
 ## Verification
 
@@ -355,6 +437,14 @@ These tests use the `inspection-testing` library to verify:
 - Branch elimination for singleton dispatch
 - Full monomorphization of hot paths
 
+### Memory Benchmarks
+
+The `benchmarks/weigh/` directory contains memory allocation benchmarks:
+
+```bash
+nix develop ".?submodules=1#" --command cabal bench hnix-weigh
+```
+
 ### Manual Verification
 
 You can also inspect the generated Core:
@@ -373,8 +463,8 @@ Look for:
 
 ### Potential Alternative Implementations
 
-| Package | Backing Store | Use Case |
-|---------|---------------|----------|
+| Sublibrary | Backing Store | Use Case |
+|------------|---------------|----------|
 | `hnix-list-seq` | `Data.Seq` | Better cons/snoc performance |
 | `hnix-attrset-map` | `Data.Map` | Ordered iteration |
 | `hnix-string-bytestring` | `ByteString` | FFI interop |
@@ -382,10 +472,9 @@ Look for:
 
 ### Remaining Work
 
-1. Add inspection tests for string operations
-2. Benchmark alternative implementations
-3. Consider making Path type abstract via Backpack
-4. Profile and optimize based on real-world Nixpkgs evaluation
+1. Benchmark alternative implementations
+2. Consider making Path type abstract via Backpack
+3. Profile and optimize based on real-world Nixpkgs evaluation
 
 ## References
 

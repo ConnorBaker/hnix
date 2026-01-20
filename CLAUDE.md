@@ -618,69 +618,69 @@ HNix uses GHC Backpack for compile-time swapping of data structure implementatio
 
 For comprehensive documentation including goals, design rationale, and how to add alternative implementations, see [doc/backpack-architecture.md](doc/backpack-architecture.md).
 
-### Package Structure
+### Sublibrary Structure
+
+All Backpack components are organized as **named sublibraries** within `hnix.cabal`:
 
 ```
 hnix/
-├── hnix-types/                      # Shared fundamental types
-│   └── src/Nix/Types/
+├── hnix.cabal                       # All sublibraries defined here
+│
+├── types/                           # hnix-types sublibrary
+│   └── Nix/Types/
 │       ├── Path.hs                  # Filesystem path type
 │       ├── VarName.hs               # Interned variable names
 │       ├── SourcePos.hs             # Source position tracking
 │       └── Atom.hs                  # Atomic literals
 │
-├── signatures/                      # Backpack signatures (abstract interfaces)
-│   ├── hnix-attrset-sig/            # AttrSet operations signature
-│   │   └── Nix/AttrSet/Sig.hsig
-│   ├── hnix-list-sig/               # NixList operations signature
-│   │   └── Nix/List/Sig.hsig
-│   └── hnix-string-sig/             # NixString operations signature
-│       └── Nix/String/Sig.hsig
+├── signatures/                      # Signature sublibraries (.hsig files)
+│   └── Nix/
+│       ├── AttrSet/Sig.hsig         # hnix-attrset-sig
+│       ├── List/Sig.hsig            # hnix-list-sig
+│       └── String/Sig.hsig          # hnix-string-sig
 │
-├── implementations/                 # Concrete implementations
-│   ├── hnix-attrset-hashmap/        # HashMap-backed AttrSet
-│   │   └── src/Nix/AttrSet/HashMap.hs
-│   ├── hnix-list-vector/            # Vector-backed NixList
-│   │   └── src/Nix/List/Vector.hs
-│   └── hnix-string-text/            # Text-backed NixString
-│       └── src/Nix/String/Text.hs
+├── implementations/                 # Implementation sublibraries
+│   ├── attrset/                     # hnix-attrset (HashMap)
+│   │   └── Nix/AttrSet/HashMap.hs
+│   ├── list/                        # hnix-list-internal (Vector)
+│   │   └── Nix/List/Vector.hs
+│   ├── string/                      # hnix-string-internal (Text)
+│   │   └── Nix/String/Text.hs
+│   └── string-public/               # hnix-string (NixLike)
+│       └── Nix/String/Text/NixLike.hs
 │
-├── hnix-value-core/                 # Core value types (indefinite package)
-│   └── src/Nix/Value/Core/
-│       ├── Value.hs                 # NValue types
-│       ├── Equal.hs                 # Value equality
-│       ├── Interned.hs              # Interned constants
-│       └── Protocol.hs              # Value protocol types
+├── core/                            # hnix-core (indefinite, merged)
+│   └── Nix/Core/
+│       ├── AttrSet.hs, List.hs      # Re-exports from signatures
+│       ├── Scope.hs, Utils.hs       # Core types
+│       ├── Expr/Types.hs            # Expression types
+│       └── Value/                   # Value system
+│           ├── Equal.hs, Frames.hs
+│           ├── Interned.hs, Monad.hs
+│           ├── Protocol.hs, String.hs
+│           └── Thunk/Basic.hs
 │
-├── hnix-builtins-list/              # List builtins (indefinite package)
-│   └── src/Nix/Builtins/List.hs
+├── builtins/                        # Builtin sublibraries (indefinite)
+│   ├── list/                        # hnix-builtins-list
+│   │   └── Nix/Builtins/List.hs
+│   └── attrset/                     # hnix-builtins-attrset
+│       └── Nix/Builtins/AttrSet.hs
 │
-├── hnix-builtins-attrset/           # AttrSet builtins (indefinite package)
-│   └── src/Nix/Builtins/AttrSet.hs
-│
-├── hnix-builtins-string/            # String builtins (indefinite package)
-│   └── src/Nix/Builtins/String.hs
-│
-└── (main hnix package)              # Instantiates signatures via mixins
+└── src/                             # Main library (instantiates all)
 ```
 
-### Building Individual Packages
+### Building Sublibraries
 
 ```bash
-# Build shared types
-nix develop ".?submodules=1#" --command cabal build hnix-types
+# Build everything (recommended)
+nix develop ".?submodules=1#" --command cabal build
 
-# Build signatures
-nix develop ".?submodules=1#" --command cabal build hnix-attrset-sig hnix-list-sig hnix-string-sig
+# Build a specific sublibrary
+nix develop ".?submodules=1#" --command cabal build hnix:hnix-types
+nix develop ".?submodules=1#" --command cabal build hnix:hnix-core
+nix develop ".?submodules=1#" --command cabal build hnix:hnix-attrset
 
-# Build implementations
-nix develop ".?submodules=1#" --command cabal build hnix-attrset-hashmap hnix-list-vector hnix-string-text
-
-# Build indefinite packages (abstract, require instantiation)
-nix develop ".?submodules=1#" --command cabal build hnix-value-core
-nix develop ".?submodules=1#" --command cabal build hnix-builtins-list hnix-builtins-attrset hnix-builtins-string
-
-# Build main library (instantiates all signatures)
+# Build the main library (instantiates all signatures)
 nix develop ".?submodules=1#" --command cabal build lib:hnix
 ```
 
@@ -694,27 +694,26 @@ nix develop ".?submodules=1#" --command cabal build lib:hnix
 
 ### Current Status
 
-**Completed:**
-- `hnix-types` package with Path, VarName, NSourcePos, NAtom
-- Backpack signatures:
+**Implemented Sublibraries:**
+- `hnix-types` - Shared types (Path, VarName, NSourcePos, NAtom)
+- Signature sublibraries:
   - `hnix-attrset-sig` - AttrSet interface
   - `hnix-list-sig` - NixList interface
-  - `hnix-string-sig` - NixString interface (uses smart constructors, not pattern synonyms)
-- Concrete implementations:
-  - `hnix-attrset-hashmap` - HashMap-backed AttrSet
-  - `hnix-list-vector` - Vector-backed NixList
-  - `hnix-string-text` - Text + HashSet StringContext backed NixString
-- Indefinite packages:
-  - `hnix-value-core` - Core value types
+  - `hnix-string-sig` - NixString interface
+- Implementation sublibraries:
+  - `hnix-attrset` - HashMap-backed AttrSet
+  - `hnix-list` / `hnix-list-internal` - Vector-backed NixList
+  - `hnix-string` / `hnix-string-internal` - Text + HashSet StringContext
+- Indefinite sublibraries:
+  - `hnix-core` - Core types and value system (merged)
   - `hnix-builtins-list` - List builtins
   - `hnix-builtins-attrset` - AttrSet builtins
-  - `hnix-builtins-string` - String builtins
-- Main `hnix` package instantiates all signatures via Cabal mixins
+- Main library instantiates all signatures via Cabal mixins
 - Backpack instantiation verified working (GHC monomorphizes correctly)
+- All tests pass (453 unit tests + inspection tests)
 
 **Future Work:**
 - Add alternative implementations (Map, Seq, ByteString) for benchmarking
-- Add inspection tests to verify monomorphization of new packages
 
 ### Migration Guide
 
