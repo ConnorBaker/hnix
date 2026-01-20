@@ -1,9 +1,3 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
-
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
 -- | List manipulation builtins using the abstract value protocol.

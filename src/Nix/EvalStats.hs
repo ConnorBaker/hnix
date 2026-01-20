@@ -1,5 +1,3 @@
-{-# LANGUAGE DeriveGeneric #-}
-
 -- | Statistics collection for evaluation profiling
 module Nix.EvalStats
   ( EvalStats(..)

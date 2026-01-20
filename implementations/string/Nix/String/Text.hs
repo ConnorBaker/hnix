@@ -1,5 +1,3 @@
-{-# LANGUAGE DeriveGeneric #-}
-
 -- | Text-backed implementation of NixString with context tracking.
 --
 -- This module provides the concrete implementation of Nix strings using

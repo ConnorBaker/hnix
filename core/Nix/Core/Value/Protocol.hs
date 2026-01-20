@@ -1,6 +1,4 @@
-{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE PatternSynonyms #-}
-{-# LANGUAGE ViewPatterns #-}
 
 -- | Value protocol for Nix builtins.
 --

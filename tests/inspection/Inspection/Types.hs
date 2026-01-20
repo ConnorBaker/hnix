@@ -1,6 +1,3 @@
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE TypeFamilies #-}
-
 -- | Concrete type aliases for inspection testing.
 --
 -- These aliases fix the common case parameters:

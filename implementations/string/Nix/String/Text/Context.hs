@@ -1,5 +1,3 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-
 -- | String context accumulator monad.
 --
 -- This module provides a monad transformer for accumulating string context

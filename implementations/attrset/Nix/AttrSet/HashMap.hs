@@ -1,8 +1,4 @@
-{-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TemplateHaskellQuotes #-}
-{-# LANGUAGE TypeFamilies #-}
 
 -- | HashMap implementation of the AttrSet signature.
 --

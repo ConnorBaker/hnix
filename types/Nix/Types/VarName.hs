@@ -1,8 +1,5 @@
-{-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TemplateHaskellQuotes #-}
-{-# LANGUAGE TypeFamilies #-}
 
 -- | VarName type - interned variable names for efficient comparison.
 --

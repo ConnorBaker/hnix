@@ -1,5 +1,3 @@
-{-# LANGUAGE TypeSynonymInstances #-}
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE DeriveAnyClass #-}
 
 -- | Core expression types using Backpack signatures.

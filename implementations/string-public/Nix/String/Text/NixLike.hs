@@ -1,5 +1,3 @@
-{-# LANGUAGE DeriveGeneric #-}
-
 -- | Nix-like context representation.
 --
 -- This module provides the 'NixLikeContext' type which represents string

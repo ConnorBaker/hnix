@@ -1,7 +1,3 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
 -- | String context builtins.
