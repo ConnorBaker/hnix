@@ -1,4 +1,3 @@
-{-# language CPP                #-}
 {-# language DeriveAnyClass     #-}
 {-# language KindSignatures     #-}
 {-# language MonoLocalBinds     #-}
@@ -171,11 +170,7 @@ instance TH.Lift NExprLoc where
           pure $ TH.appE (TH.varE 'mkVarName) (TH.litE (TH.stringL (toString (varNameText b))))
         )
       )
-#if MIN_VERSION_template_haskell(2,17,0)
   liftTyped = TH.unsafeCodeCoerce . TH.lift
-#elif MIN_VERSION_template_haskell(2,16,0)
-  liftTyped = TH.unsafeTExpCoerce . TH.lift
-#endif
 
 -- * Other
 

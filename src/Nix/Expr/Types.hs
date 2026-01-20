@@ -1,5 +1,4 @@
 {-# language ConstraintKinds #-}
-{-# language CPP #-}
 {-# language DeriveAnyClass #-}
 {-# language DerivingStrategies #-}
 {-# language FunctionalDependencies #-}
@@ -69,10 +68,6 @@ import           Data.Ord.Deriving              ( deriveOrd1 , deriveOrd2  )
 import           Data.Aeson.TH                  ( deriveJSON2 )
 import qualified Type.Reflection               as Reflection
 import           Nix.Atoms
-#if !MIN_VERSION_text(1,2,4)
--- NOTE: Remove package @th-lift-instances@ removing this
-import           Instances.TH.Lift              ()  -- importing Lift Text for GHC 8.6
-#endif
 
 
 -- * utils
@@ -469,11 +464,6 @@ type NAttrPath r = NonEmpty (NKeyName r)
 
 -- ** data Binding
 
-#if !MIN_VERSION_hashable(1,3,1)
--- Required by Hashable Binding deriving. There was none of this Hashable instance before mentioned version, remove this in year >2022
-instance Hashable1 NonEmpty
-#endif
-
 -- | A single line of the bindings section of a let expression or of a set.
 data Binding r
   = NamedVar (NAttrPath r) r NSourcePos
@@ -775,16 +765,12 @@ instance TH.Lift NExpr where
 
 -- ** Methods
 
-#if __GLASGOW_HASKELL__ >= 900
 hashAt
   :: Functor f
   => VarName
   -> (Maybe v -> f (Maybe v))
   -> AttrSet v
   -> f (AttrSet v)
-#else
-hashAt :: VarName -> Lens' (AttrSet v) (Maybe v)
-#endif
 hashAt = A.hashAt
 
 -- | Get the name out of the parameter (there might be none).

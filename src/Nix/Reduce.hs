@@ -1,4 +1,3 @@
-{-# language CPP #-}
 {-# language AllowAmbiguousTypes #-}
 {-# language ConstraintKinds #-}
 {-# language GeneralizedNewtypeDeriving #-}
@@ -22,10 +21,6 @@ module Nix.Reduce
 
 import           Nix.Prelude
 import           Control.Monad.Catch            ( MonadCatch(catch) )
-#if !MIN_VERSION_base(4,12,0)
-import           Prelude                 hiding ( fail )
-import           Control.Monad.Fail
-#endif
 import           Control.Monad.Fix              ( MonadFix )
 import           Data.Fix                       ( Fix(..)
                                                 , foldFix

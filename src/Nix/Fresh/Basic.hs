@@ -1,13 +1,8 @@
-{-# language CPP #-}
-
 {-# options_ghc -Wno-orphans #-}
 
 
 module Nix.Fresh.Basic where
 
-#if !MIN_VERSION_base(4,13,0)
-import           Control.Monad.Fail ( MonadFail )
-#endif
 import           Nix.Prelude
 import           Nix.Core.List                  ( NixList )
 import qualified Nix.Core.List                 as L

@@ -1,6 +1,5 @@
 {-# language AllowAmbiguousTypes #-}
 {-# language TypeFamilies #-}
-{-# language CPP #-}
 {-# language DataKinds #-}
 {-# language GeneralizedNewtypeDeriving #-}
 {-# language KindSignatures #-}
@@ -35,9 +34,6 @@ import           Control.Monad.Catch            ( MonadThrow
                                                 , MonadCatch
                                                 , MonadMask
                                                 )
-#if !MIN_VERSION_base(4,13,0)
-import           Control.Monad.Fail             ( MonadFail )
-#endif
 import           Control.Monad.Free             ( Free(Free) )
 import           Control.Monad.Fix              ( MonadFix )
 import           Control.Monad.Ref              ( MonadRef(newRef)

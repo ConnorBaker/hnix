@@ -1,4 +1,3 @@
-{-# language CPP #-}
 {-# language DataKinds #-}
 
 module Nix.Json where
@@ -8,11 +7,8 @@ import qualified Data.Aeson                    as A
 import qualified Data.Aeson.Encoding           as A
 import qualified Data.Vector                   as V
 import qualified Nix.Core.List                 as L
-import qualified Data.HashMap.Strict           as HM
-#if MIN_VERSION_aeson(2,0,0)
 import qualified Data.Aeson.Key                as AKM
 import qualified Data.Aeson.KeyMap             as AKM
-#endif
 import qualified Nix.Core.AttrSet              as A
 import           Nix.Atoms
 import           Nix.Effects
@@ -31,12 +27,7 @@ toEncodingSorted = \case
       . foldMap
       (\(k, v) -> A.pair k $ toEncodingSorted v)
       . sortWith fst $
-#if MIN_VERSION_aeson(2,0,0)
-          AKM.toList
-#else
-          HM.toList
-#endif
-            m
+          AKM.toList m
   A.Array l -> A.list toEncodingSorted $ V.toList l
   v         -> A.toEncoding v
 
@@ -74,13 +65,8 @@ toJSON = \case
           Just outPath -> intoJson outPath
           Nothing      -> A.Object <$> traverse intoJson kmap
    where
-#if MIN_VERSION_aeson(2,0,0)
     lkup = AKM.lookup
     kmap = AKM.fromList [(AKM.fromText (varNameText k), v) | (k, v) <- A.toList m]
-#else
-    lkup = HM.lookup
-    kmap = HM.fromList [(varNameText k, v) | (k, v) <- A.toList m]
-#endif
   NVPath p ->
     do
       fp <- lift $ coerce <$> addPath p

@@ -1,5 +1,4 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -47,10 +46,8 @@ module Nix.Builtins.Path
 import           Nix.Prelude
 import           GHC.Exception                  ( ErrorCall(ErrorCall) )
 import qualified Data.Aeson                    as A
-#if MIN_VERSION_aeson(2,0,0)
 import qualified Data.Aeson.Key                as AKM
 import qualified Data.Aeson.KeyMap             as AKM
-#endif
 import qualified Nix.Core.AttrSet              as NixA
 import           Data.Scientific                ( floatingOrInteger )
 import qualified Data.Map.Strict               as M
@@ -559,11 +556,7 @@ fromJSONNix nvjson =
       A.Object m ->
         traverseToNValue
           (NVSet emptyPositionSet)
-#if MIN_VERSION_aeson(2,0,0)
           (NixA.fromList [(mkVarName (AKM.toText k), v) | (k, v) <- AKM.toList m])
-#else
-          (NixA.fromList [(mkVarName k, v) | (k, v) <- HM.toList m])
-#endif
       A.Array  l -> NVList . L.fromList <$> traverse jsonToNValue (toList l)
       A.String s -> pure $ mkNVStrWithoutContext s
       A.Number n ->

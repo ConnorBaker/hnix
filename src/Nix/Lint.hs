@@ -1,5 +1,4 @@
 {-# language ConstraintKinds #-}
-{-# language CPP #-}
 {-# language DataKinds #-}
 {-# language GeneralizedNewtypeDeriving #-}
 {-# language KindSignatures #-}
@@ -425,9 +424,6 @@ lintBinaryOp op lsym rarg =
         NUpdate -> one $ TSet mempty
 
         NConcat -> one $ TList y
-#if __GLASGOW_HASKELL__ < 810
-        _ -> fail "Should not be possible"  -- symerr or this fun signature should be changed to work in type scope
-#endif
 
 
 
