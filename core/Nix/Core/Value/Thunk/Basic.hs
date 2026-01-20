@@ -112,9 +112,8 @@ instance Show (NThunkF m v) where
 
 -- | Check if a thunk value is already computed (cache hit detection)
 isComputed :: MonadRef m => NThunkF m v -> m Bool
-isComputed (Thunk _ stateRef) = do
-  s <- readRef stateRef
-  pure $ case s of
+isComputed (Thunk _ stateRef) =
+  readRef stateRef <&> \case
     ThunkComputed _ -> True
     _               -> False
 {-# INLINABLE isComputed #-}
@@ -138,9 +137,8 @@ instance (MonadBasicThunk m, MonadCatch m)
   {-# INLINABLE thunk #-}
 
   query :: m v -> NThunkF m v -> m v
-  query vStub (Thunk _ stateRef) = do
-    s <- readRef stateRef
-    case s of
+  query vStub (Thunk _ stateRef) =
+    readRef stateRef >>= \case
       ThunkComputed v -> pure v
       _               -> vStub
   {-# INLINABLE query #-}

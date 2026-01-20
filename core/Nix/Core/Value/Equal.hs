@@ -184,17 +184,13 @@ valueEqM (Free (NValue' (extract -> x))) (Free (NValue' (extract -> y))) =
 -- but that one is.
 thunkEqM :: (MonadThunk t m (NValue t f m), NVConstraint f) => t -> t -> m Bool
 thunkEqM lt rt =
-  do
-    lv <- force lt
-    rv <- force rt
-
-    let
-      unsafePtrEq =
+  force lt >>= \lv ->
+  force rt >>= \rv ->
+  let unsafePtrEq =
         if on (==) thunkId lt rt
           then pure True
           else valueEqM lv rv
-
-    case (lv, rv) of
+  in case (lv, rv) of
       (NVClosure _ _, NVClosure _ _) -> unsafePtrEq
       (NVList _     , NVList _     ) -> unsafePtrEq
       (NVSet _ _    , NVSet _ _    ) -> unsafePtrEq
