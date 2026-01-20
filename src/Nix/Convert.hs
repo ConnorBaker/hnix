@@ -28,7 +28,8 @@ import           Nix.String
 import           Nix.Value
 import           Nix.Value.Monad
 import           Nix.Thunk                      ( MonadThunk(force) )
-import qualified Data.Vector                   as V
+import           Nix.Core.List                  ( NixList )
+import qualified Nix.Core.List                 as L
 
 newtype Deeper a = Deeper a
   deriving (Functor, Foldable, Traversable)
@@ -291,7 +292,7 @@ instance Convertible e t f m
   fromValueMay =
     pure .
       \case
-        NVList' l -> pure (V.toList l)
+        NVList' l -> pure (L.nlToList l)
         _         -> mempty
 
   fromValue = fromMayToValue TList
@@ -302,15 +303,15 @@ instance ( Convertible e t f m
   => FromValue [a] m (Deeper (NValue' t f m (NValue t f m))) where
   fromValueMay =
     \case
-      Deeper (NVList' l) -> traverseFromValue (V.toList l)
+      Deeper (NVList' l) -> traverseFromValue (L.nlToList l)
       _                  -> stub
 
 
   fromValue = fromMayToDeeperValue TList
 
--- | Vector instance - O(1) extraction, no list conversion!
+-- | NixList instance - O(1) extraction, no list conversion!
 instance Convertible e t f m
-  => FromValue (V.Vector (NValue t f m)) m (NValue' t f m (NValue t f m)) where
+  => FromValue (NixList (NValue t f m)) m (NValue' t f m (NValue t f m)) where
 
   fromValueMay =
     pure .
@@ -462,17 +463,17 @@ instance Convertible e t f m
 -- | With 'ToValue', we can always act recursively
 instance Convertible e t f m
   => ToValue [NValue t f m] m (NValue' t f m (NValue t f m)) where
-  toValue = pure . NVList' . V.fromList
+  toValue = pure . NVList' . L.nlFromList
 
 instance (Convertible e t f m
   , ToValue a m (NValue t f m)
   )
   => ToValue [a] m (Deeper (NValue' t f m (NValue t f m))) where
-  toValue l = Deeper . NVList' . V.fromList <$> traverseToValue l
+  toValue l = Deeper . NVList' . L.nlFromList <$> traverseToValue l
 
--- | Vector instance - O(1) construction, no list conversion!
+-- | NixList instance - O(1) construction, no list conversion!
 instance Convertible e t f m
-  => ToValue (V.Vector (NValue t f m)) m (NValue' t f m (NValue t f m)) where
+  => ToValue (NixList (NValue t f m)) m (NValue' t f m (NValue t f m)) where
   toValue = pure . NVList'
 
 instance Convertible e t f m

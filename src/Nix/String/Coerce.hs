@@ -20,7 +20,7 @@ import           Nix.String
                                                 , nixStringOne
                                                 )
 import           Nix.Value
-import qualified Data.Vector                   as V
+import qualified Nix.Core.List                 as L
 import           Nix.Value.Monad
 
 #ifdef MIN_VERSION_ghc_datasize
@@ -99,7 +99,7 @@ coerceAnyToNixString call ctsm = go
           NVConstant NNull ->
             pure nixStringEmpty
           NVList l ->
-            nixStringUnwords . V.toList <$> V.mapM go l
+            nixStringUnwords . L.nlToList <$> L.nlMapM go l
           v@(NVSet _ s) ->
             case continueOnKey (`call` v) "__toString"
                  <|> continueOnKey pure "outPath" of

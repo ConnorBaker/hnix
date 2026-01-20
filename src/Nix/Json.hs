@@ -7,6 +7,7 @@ import           Nix.Prelude
 import qualified Data.Aeson                    as A
 import qualified Data.Aeson.Encoding           as A
 import qualified Data.Vector                   as V
+import qualified Nix.Core.List                 as L
 import qualified Data.HashMap.Strict           as HM
 #if MIN_VERSION_aeson(2,0,0)
 import qualified Data.Aeson.Key                as AKM
@@ -58,7 +59,7 @@ toJSON = \case
   NVConstant (NBool  b) -> pure $ A.toJSON b
   NVConstant NNull      -> pure   A.Null
   NVStr      ns         -> A.toJSON <$> extractNixString ns
-  NVList l -> A.Array <$> traverse intoJson l
+  NVList l -> A.Array . V.fromList <$> traverse intoJson (L.nlToList l)
   NVSet pos m ->
     -- First check for __toString, then outPath, then normal object encoding
     case A.lookup (mkVarName "__toString") m of

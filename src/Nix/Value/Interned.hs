@@ -35,7 +35,7 @@ import           Nix.Value                      ( NValue
                                                 , pattern NVList
                                                 , pattern NVSet
                                                 )
-import qualified Data.Vector                   as V
+import qualified Nix.Core.List                 as L
 
 
 -- | Cache of interned constant values, created once per evaluation.
@@ -71,7 +71,7 @@ mkInternedValues = InternedValues
   { internedTrue      = NVConstant (NBool True)
   , internedFalse     = NVConstant (NBool False)
   , internedNull      = NVConstant NNull
-  , internedEmptyList = NVList V.empty
+  , internedEmptyList = NVList L.nlEmpty
   , internedEmptySet  = NVSet emptyPositionSet mempty
   }
 {-# INLINABLE mkInternedValues #-}

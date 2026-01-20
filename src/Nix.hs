@@ -31,7 +31,7 @@ module Nix
 where
 
 import           Nix.Prelude
-import qualified Data.Vector                   as V
+import qualified Nix.Core.List                 as L
 import           GHC.Err                        ( errorWithoutStackTrace )
 import           Data.Fix                       ( Fix )
 import qualified Nix.Core.AttrSet              as A
@@ -167,7 +167,7 @@ processResult h val =
         do
           v' <- demand v
           case (k, v') of
-            (Text.decimal . varNameText -> Right (n,""), NVList xs) -> processKeys ks $ xs V.! n
+            (Text.decimal . varNameText -> Right (n,""), NVList xs) -> processKeys ks $ L.nlUnsafeIndex xs n
             (_,         NVSet _ xs) ->
               case A.lookup k xs of
                 Nothing -> errorWithoutStackTrace $ "Set does not contain key ''" <> show k <> "''."

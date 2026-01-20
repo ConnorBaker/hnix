@@ -28,7 +28,7 @@ import           Nix.Parser
 import           Nix.String
 import           Nix.Thunk
 import           Nix.Value
-import qualified Data.Vector                   as V
+import qualified Nix.Core.List                 as L
 
 -- | This type represents a pretty printed nix expression
 -- together with some information about the expression.
@@ -414,7 +414,7 @@ valueToExpr = iterNValueByDiscardWith thk (Fix . phi)
   phi :: NValue' t f m NExpr -> NExprF NExpr
   phi (NVConstant' a     ) = NConstant a
   phi (NVStr'      ns    ) = NStr $ DoubleQuoted $ one $ Plain $ ignoreContext ns
-  phi (NVList'     l     ) = NList (V.toList l)
+  phi (NVList'     l     ) = NList (L.nlToList l)
   phi (NVSet'      p    s) = NSet mempty
     [ NamedVar (one $ StaticKey k) v (fromMaybe nullPos $ (`A.lookup` p) k)
     | (k, v) <- sortWith fst $ A.toList s  -- Sort alphabetically like Nix
@@ -544,7 +544,7 @@ printNix =
     in  if s == thunkStubText
           then s  -- Don't quote the cycle/thunk stub
           else "\"" <> escapeString s <> "\""
-  phi (NVList'     l ) = case V.toList l of
+  phi (NVList'     l ) = case L.nlToList l of
     [] -> "[ ]"
     xs -> "[ " <> unwords xs <> " ]"
   phi (NVSet' _ s) =

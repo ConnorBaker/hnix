@@ -6,6 +6,9 @@
 signature Nix.List.Sig where
 
 import Control.DeepSeq (NFData)
+import Data.Functor.Classes (Eq1, Show1)
+import Data.Hashable (Hashable)
+import Data.Semialign (Align, Semialign)
 
 -- | Abstract list type for Nix list values.
 -- The concrete implementation is selected at link time via Backpack mixins.
@@ -18,6 +21,9 @@ nlLength :: NixList a -> Int
 
 -- | Safe indexing by position. Returns Nothing if index is out of bounds.
 nlIndex :: NixList a -> Int -> Maybe a
+
+-- | Unsafe indexing by position. Behavior undefined if index out of bounds.
+nlUnsafeIndex :: NixList a -> Int -> a
 
 -- | Check if the list is empty.
 nlNull :: NixList a -> Bool
@@ -47,8 +53,17 @@ nlToList :: NixList a -> [a]
 -- | Map a function over elements.
 nlMap :: (a -> b) -> NixList a -> NixList b
 
+-- | Monadic map over elements.
+nlMapM :: Monad m => (a -> m b) -> NixList a -> m (NixList b)
+
 -- | Filter elements by a predicate.
 nlFilter :: (a -> Bool) -> NixList a -> NixList a
+
+-- | Monadic filter by a predicate.
+nlFilterM :: Monad m => (a -> m Bool) -> NixList a -> m (NixList a)
+
+-- | Filter and transform simultaneously.
+nlMapMaybe :: (a -> Maybe b) -> NixList a -> NixList b
 
 -- | Traverse with an applicative effect.
 nlTraverse :: Applicative m => (a -> m b) -> NixList a -> m (NixList b)
@@ -62,11 +77,41 @@ nlEmpty :: NixList a
 -- | Strict left fold.
 nlFoldl' :: (b -> a -> b) -> b -> NixList a -> b
 
+-- | Strict monadic left fold.
+nlFoldM' :: Monad m => (b -> a -> m b) -> b -> NixList a -> m b
+
+-- | Lazy right fold.
+nlFoldr :: (a -> b -> b) -> b -> NixList a -> b
+
 -- | Get the head, if non-empty.
 nlHead :: NixList a -> Maybe a
 
 -- | Get the tail, if non-empty.
 nlTail :: NixList a -> Maybe (NixList a)
+
+-- | Generate a list of given length using a function on indices.
+nlGenerate :: Int -> (Int -> a) -> NixList a
+
+-- | Monadic generation of a list.
+nlGenerateM :: Monad m => Int -> (Int -> m a) -> m (NixList a)
+
+-- | Concatenate a list of lists.
+nlConcat :: [NixList a] -> NixList a
+
+-- | Create a singleton list.
+nlSingleton :: a -> NixList a
+
+-- | Unsafe tail - undefined behavior if list is empty.
+nlUnsafeTail :: NixList a -> NixList a
+
+-- | Strict right fold.
+nlFoldr' :: (a -> b -> b) -> b -> NixList a -> b
+
+-- | Partition a list by a predicate.
+nlPartition :: (a -> Bool) -> NixList a -> (NixList a, NixList a)
+
+-- | Partition a list by a monadic predicate.
+nlPartitionM :: Monad m => (a -> m Bool) -> NixList a -> m (NixList a, NixList a)
 
 -- * Required instances
 
@@ -74,7 +119,13 @@ instance Functor NixList
 instance Foldable NixList
 instance Traversable NixList
 instance Eq a => Eq (NixList a)
+instance Eq1 NixList
+instance Ord a => Ord (NixList a)
 instance Show a => Show (NixList a)
+instance Show1 NixList
 instance Semigroup (NixList a)
 instance Monoid (NixList a)
 instance NFData a => NFData (NixList a)
+instance Hashable a => Hashable (NixList a)
+instance Semialign NixList
+instance Align NixList

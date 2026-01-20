@@ -13,7 +13,7 @@ import qualified "crypton" Crypto.Hash        as Crypto.Hash
 import           Data.Dependent.Sum            ( DSum((:=>)) )
 import qualified Data.HashMap.Strict           as HM
 import qualified Nix.Core.AttrSet              as A
-import           Data.Vector                    ( Vector )
+import           Nix.Core.List                  ( NixList )
 import           Data.List.Split                ( splitOn )
 import qualified Data.Text                     as Text
 import qualified Data.ByteString               as B
@@ -125,7 +125,7 @@ findEnvPathM name =
     case mres of
       Nothing -> fail "impossible"
       Just v -> do
-        l <- fromValue @(Vector (NValue t f m)) =<< demand v
+        l <- fromValue @(NixList (NValue t f m)) =<< demand v
         findPathBy nixFilePath l name
 
  where
@@ -145,7 +145,7 @@ findPathBy
   :: forall e t f m
    . MonadNix e t f m
   => (Path -> m (Maybe Path))
-  -> Vector (NValue t f m)
+  -> NixList (NValue t f m)
   -> Path
   -> m Path
 findPathBy finder ls name =
@@ -1324,13 +1324,13 @@ parseSha256Digest t =
     Right (StoreHash.HashAlgo_SHA256 :=> d) -> pure d
     Right _ -> throwError $ ErrorCall "builtins.fetchGit: unsupported hash algorithm"
 
-defaultFindPath :: MonadNix e t f m => Vector (NValue t f m) -> Path -> m Path
+defaultFindPath :: MonadNix e t f m => NixList (NValue t f m) -> Path -> m Path
 defaultFindPath = findPathM
 
 findPathM
   :: forall e t f m
    . MonadNix e t f m
-  => Vector (NValue t f m)
+  => NixList (NValue t f m)
   -> Path
   -> m Path
 findPathM = findPathBy existingPath

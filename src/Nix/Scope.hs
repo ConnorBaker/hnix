@@ -13,6 +13,8 @@ import qualified Text.Show
 import           Lens.Family2
 import           Nix.Expr.Types
 import qualified Nix.Core.AttrSet              as A
+import           Nix.Core.List                  ( NixList )
+import qualified Nix.Core.List                 as L
 import qualified GHC.Clock                     as Clock
 
 -- | Performance note on scope representation (2025-01):
@@ -102,6 +104,32 @@ attrSetInsert = A.insert
 attrSetKeys :: AttrSet a -> [VarName]
 attrSetKeys = A.keys
 {-# INLINE attrSetKeys #-}
+
+-- | NixList operations re-exported for modules that can't import hnix-core directly.
+-- These are needed by the executable and tests.
+nixListFromList :: [a] -> NixList a
+nixListFromList = L.nlFromList
+{-# INLINE nixListFromList #-}
+
+nixListToList :: NixList a -> [a]
+nixListToList = L.nlToList
+{-# INLINE nixListToList #-}
+
+nixListLength :: NixList a -> Int
+nixListLength = L.nlLength
+{-# INLINE nixListLength #-}
+
+nixListNull :: NixList a -> Bool
+nixListNull = L.nlNull
+{-# INLINE nixListNull #-}
+
+nixListIndex :: NixList a -> Int -> Maybe a
+nixListIndex = L.nlIndex
+{-# INLINE nixListIndex #-}
+
+nixListEmpty :: NixList a
+nixListEmpty = L.nlEmpty
+{-# INLINE nixListEmpty #-}
 
 scopeLookup :: VarName -> [Scope a] -> Maybe a
 scopeLookup key = foldr fun Nothing

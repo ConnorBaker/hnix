@@ -9,7 +9,8 @@ module Nix.Fresh.Basic where
 import           Control.Monad.Fail ( MonadFail )
 #endif
 import           Nix.Prelude
-import           Data.Vector                    ( Vector )
+import           Nix.Core.List                  ( NixList )
+import qualified Nix.Core.List                 as L
 import           Nix.Effects
 import           Nix.Render
 import           Nix.Fresh
@@ -38,11 +39,11 @@ instance (MonadEffects t f m, MonadDataContext f m)
   findEnvPath :: String -> StdIdT m Path
   findEnvPath      = lift . findEnvPath @t @f @m
 
-  findPath :: Vector (NValue t f (StdIdT m)) -> Path -> StdIdT m Path
+  findPath :: NixList (NValue t f (StdIdT m)) -> Path -> StdIdT m Path
   findPath vs path =
     do
       i <- FreshIdT ask
-      lift $ findPath @t @f @m (unliftNValue (`runFreshIdT` i) <$> vs) path
+      lift $ findPath @t @f @m (L.nlMap (unliftNValue (`runFreshIdT` i)) vs) path
 
   importPath :: Path -> StdIdT m (NValue t f (StdIdT m))
   importPath path =

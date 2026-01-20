@@ -27,7 +27,7 @@ import           Data.Functor.Classes           ( Show1
                                                 , liftShowsPrec
                                                 , showsUnaryWith
                                                 , Eq1(liftEq) )
-import           Data.Vector                    ( Vector )
+import           Nix.Core.List                  ( NixList )
 import qualified Text.Show
 import           Text.Show                      ( showsPrec
                                                 , showString
@@ -115,9 +115,9 @@ data NValueF p m r
      -- string has been build from
     | NVStrF NixString
     | NVPathF Path
-    | NVListF (Vector r)
-      -- ^ Nix lists use Vector for O(1) length and indexing.
-      -- Elements remain lazy (not strict Vector) to preserve Nix semantics.
+    | NVListF (NixList r)
+      -- ^ Nix lists use NixList abstraction for O(1) length and indexing.
+      -- Elements remain lazy to preserve Nix semantics.
     | NVSetF PositionSet (AttrSet r)
       -- ^
       --   Quite frequently actions/processing happens with values
@@ -445,8 +445,8 @@ pattern NVPath' :: NVConstraint w => Path -> NValue' t w m a
 pattern NVPath' x <- NValue' (extract -> NVPathF x)
   where NVPath' = NValue' . pure . NVPathF . coerce
 
--- | Haskell Vector to the Nix list (O(1) length and indexing),
-pattern NVList' :: NVConstraint w => Vector a -> NValue' t w m a
+-- | Haskell NixList to the Nix list (O(1) length and indexing),
+pattern NVList' :: NVConstraint w => NixList a -> NValue' t w m a
 pattern NVList' l <- NValue' (extract -> NVListF l)
   where NVList' = NValue' . pure . NVListF
 

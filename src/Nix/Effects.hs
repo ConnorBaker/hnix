@@ -23,6 +23,8 @@ import qualified Data.HashSet                  as HS
 import qualified Data.Text                     as Text
 import           Data.Vector                    ( Vector )
 import qualified Data.Vector                   as V
+import           Nix.Core.List                  ( NixList )
+import qualified Nix.Core.List                 as L
 import qualified Data.ByteString.Char8         as BS8
 import           Network.HTTP.Client     hiding ( path, Proxy )
 import           Network.HTTP.Client.TLS
@@ -89,7 +91,7 @@ class
   findEnvPath :: String -> m Path
 
   -- | Having an explicit list of sets corresponding to the @NIX_PATH@ and a file path try to find an existing path.
-  findPath :: Vector (NValue t f m) -> Path -> m Path
+  findPath :: NixList (NValue t f m) -> Path -> m Path
 
   importPath :: Path -> m (NValue t f m)
   pathToDefaultNix :: Path -> m Path

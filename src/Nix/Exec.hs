@@ -51,8 +51,8 @@ import           Nix.String.Coerce
 import           Nix.Thunk
 import           Nix.Value
 import           Nix.Value.Equal
-import qualified Data.Vector                   as V
 import           Data.Vector                    ( Vector )
+import qualified Nix.Core.List                 as L
 import           Nix.Value.Monad
 import           Prettyprinter
 import qualified Text.Show.Pretty              as PS
@@ -557,11 +557,11 @@ execBinaryOpForced' op lval rval =
       case (lval, rval) of
         (NVList ls, NVList rs)
           -- Fast paths: avoid allocation when one or both lists are empty
-          | V.null ls && V.null rs -> withProvCtx
-              (\scope span -> pure $ mkNVBinaryOpWithProvenance scope span op (pure lval) (pure rval) $ NVList V.empty)
+          | L.nlNull ls && L.nlNull rs -> withProvCtx
+              (\scope span -> pure $ mkNVBinaryOpWithProvenance scope span op (pure lval) (pure rval) $ NVList L.nlEmpty)
               askInternedEmptyList
-          | V.null ls -> wrapResult rval
-          | V.null rs -> wrapResult lval
+          | L.nlNull ls -> wrapResult rval
+          | L.nlNull rs -> wrapResult lval
           | otherwise -> wrapResult $ NVList $ ls <> rs
         _ -> unsupportedTypes
 

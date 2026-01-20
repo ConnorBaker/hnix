@@ -8,7 +8,7 @@ import           Nix.Expr.Types
 import qualified Nix.Core.AttrSet              as A
 import           Nix.String
 import           Nix.Value
-import qualified Data.Vector                   as V
+import qualified Nix.Core.List                 as L
 import           Text.XML.Light                 ( Element(Element)
                                                 , Attr(Attr)
                                                 , Content(Elem)
@@ -48,7 +48,7 @@ toXML = runWithStringContext . fmap pp . iterNValueByDiscardWith cyc phi
     NVStr' str ->
       mkEVal "string" <$> extractNixString str
     NVList' l ->
-      mkE "list" . fmap Elem <$> sequenceA (V.toList l)
+      mkE "list" . fmap Elem <$> sequenceA (L.nlToList l)
 
     NVSet' _ s ->
       mkE
