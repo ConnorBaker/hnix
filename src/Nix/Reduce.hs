@@ -1,8 +1,4 @@
-{-# language AllowAmbiguousTypes #-}
-{-# language ConstraintKinds #-}
-{-# language GeneralizedNewtypeDeriving #-}
 {-# language PartialTypeSignatures #-}
-{-# language TypeFamilies #-}
 
 {-# options_ghc -fno-warn-name-shadowing #-}
 

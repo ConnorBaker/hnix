@@ -19,6 +19,7 @@ signature Nix.String.Sig where
 
 -- Standard library imports for types used in signatures
 import Prelude (Bool, Eq, Maybe, Monoid, Ord, Semigroup, Show)
+import Data.Kind (Type)
 import Control.DeepSeq (NFData)
 import Data.Hashable (Hashable)
 import Data.HashSet (HashSet)
@@ -29,6 +30,7 @@ import Nix.Types.VarName (VarName)
 
 -- | A Nix 'StringContext' tracks where string values come from.
 -- This is used for proper dependency tracking in the Nix store.
+type StringContext :: Type
 data StringContext
 
 -- | Accessor: get the flavor of the context
@@ -48,6 +50,7 @@ instance NFData StringContext
 
 -- | A 'ContextFlavor' describes the type of derivation reference.
 -- This is an opaque type with smart constructors.
+type ContextFlavor :: Type
 data ContextFlavor
 
 instance Eq ContextFlavor
@@ -82,6 +85,7 @@ getDerivationOutputName :: ContextFlavor -> Maybe Text
 
 -- | Abstract Nix string type with context tracking.
 -- The concrete implementation is selected at link time via Backpack mixins.
+type NixString :: Type
 data NixString
 
 instance Eq NixString

@@ -1,7 +1,4 @@
-{-# language ConstraintKinds #-}
-{-# language KindSignatures #-}
 {-# language PatternSynonyms #-}
-{-# language RankNTypes #-}
 
 -- | Interned constant values for zero-allocation Nix evaluation.
 --

@@ -1,15 +1,5 @@
-{-# language AllowAmbiguousTypes #-}
 {-# language CPP #-}
-{-# language ConstraintKinds #-}
-{-# language DataKinds #-}
-{-# language DerivingStrategies #-}
-{-# language GeneralizedNewtypeDeriving #-}
-{-# language KindSignatures #-}
 {-# language PartialTypeSignatures #-}
-{-# language RankNTypes #-}
-{-# language StandaloneDeriving #-}
-{-# language TypeFamilies #-}
-{-# language UndecidableInstances #-}
 
 {-# options_ghc -Wno-orphans #-}
 {-# options_ghc -fno-warn-name-shadowing #-}

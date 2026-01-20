@@ -1,7 +1,5 @@
 {-# language DefaultSignatures #-}
 {-# language FunctionalDependencies #-}
-{-# language TypeFamilies #-}
-{-# language TypeOperators #-}
 
 module Nix.Core.Value.Thunk where
 

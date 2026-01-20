@@ -1,12 +1,7 @@
-{-# language ConstraintKinds #-}
 {-# language DeriveAnyClass #-}
-{-# language DerivingStrategies #-}
 {-# language FunctionalDependencies #-}
-{-# language GeneralizedNewtypeDeriving #-}
-{-# language RankNTypes #-}
 {-# language TemplateHaskell #-}
 {-# language TemplateHaskellQuotes #-}
-{-# language TypeFamilies #-}
 
 {-# options_ghc -Wno-orphans #-}
 {-# options_ghc -Wno-name-shadowing #-}

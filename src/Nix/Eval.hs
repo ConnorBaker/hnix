@@ -1,6 +1,3 @@
-{-# language AllowAmbiguousTypes #-}
-{-# language ConstraintKinds #-}
-{-# language RankNTypes #-}
 
 
 module Nix.Eval where
@@ -182,6 +179,7 @@ eval (NAbs    params body) = do
   -- are forced during application.
   curScope <- askScopes
   let
+    withCurScope :: forall r. m r -> m r
     withCurScope = withScopes curScope
 
     fun :: m v -> (AttrSet (m v) -> m v -> m r) -> m r

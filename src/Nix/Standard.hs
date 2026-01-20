@@ -1,17 +1,4 @@
-{-# language AllowAmbiguousTypes #-}
-{-# language TypeFamilies #-}
-{-# language DataKinds #-}
-{-# language GeneralizedNewtypeDeriving #-}
-{-# language KindSignatures #-}
-{-# language TypeApplications #-}
-{-# language TypeOperators #-}
-{-# language UndecidableInstances #-}
-{-# language RankNTypes #-}
-{-# language ScopedTypeVariables #-}
-{-# language ConstraintKinds #-}
 {-# language PatternSynonyms #-}
-{-# language MultiParamTypeClasses #-}
-{-# language FlexibleInstances #-}
 
 {-# options_ghc -Wno-orphans #-}
 

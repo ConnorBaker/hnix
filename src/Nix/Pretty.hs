@@ -1,5 +1,4 @@
 {-# language CPP #-}
-{-# language AllowAmbiguousTypes #-}
 
 {-# options_ghc -fno-warn-name-shadowing #-}
 

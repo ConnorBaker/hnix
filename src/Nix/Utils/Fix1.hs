@@ -1,9 +1,4 @@
-{-# language TypeFamilies #-}
-{-# language ConstraintKinds #-}
 {-# language CPP #-}
-{-# language GeneralizedNewtypeDeriving #-}
-{-# language PolyKinds #-}
-{-# language UndecidableInstances #-}
 
 module Nix.Utils.Fix1
   ( Fix1(..)

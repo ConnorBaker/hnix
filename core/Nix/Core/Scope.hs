@@ -1,11 +1,5 @@
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE AllowAmbiguousTypes #-}
-{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DefaultSignatures #-}
 {-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE TypeFamilies #-}
 
 -- | Scope management using abstract AttrSet from Backpack signature.
 --
@@ -46,6 +40,7 @@ import Lens.Family2
 import qualified GHC.Clock
 
 -- | A single scope level, wrapping an AttrSet.
+type Scope :: Type -> Type
 newtype Scope a = Scope { unScope :: AttrSet a }
   deriving stock (Generic)
   deriving newtype

@@ -1,5 +1,4 @@
 {-# language CPP #-}
-{-# language GeneralizedNewtypeDeriving #-}
 
 -- | This is a module of custom "Prelude" code.
 -- It is for import for projects other then @HNix@.

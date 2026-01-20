@@ -1,11 +1,5 @@
-{-# language AllowAmbiguousTypes #-}
-{-# language DataKinds #-}
-{-# language KindSignatures #-}
 {-# language MultiWayIf #-}
-{-# language TypeFamilies #-}
 {-# language RecordWildCards #-}
-{-# language RankNTypes #-}
-{-# language ScopedTypeVariables #-}
 
 module Main ( main ) where
 

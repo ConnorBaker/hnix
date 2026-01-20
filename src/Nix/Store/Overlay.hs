@@ -1,7 +1,4 @@
-{-# language GeneralizedNewtypeDeriving #-}
-{-# language ScopedTypeVariables #-}
 {-# language PackageImports #-}
-{-# language TypeFamilies #-}
 
 module Nix.Store.Overlay
   ( OverlayStoreT(..)

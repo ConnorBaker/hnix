@@ -1,9 +1,6 @@
 {-# language CPP #-}
 {-# language DeriveAnyClass #-}
-{-# language KindSignatures #-}
-{-# language ConstraintKinds #-}
 {-# language PatternSynonyms #-}
-{-# language RankNTypes #-}
 {-# language TemplateHaskell #-}
 
 {-# options_ghc -Wno-missing-signatures #-}

@@ -1,11 +1,5 @@
 {-# language MultiWayIf #-}
 {-# language CPP #-}
-{-# language AllowAmbiguousTypes #-}
-{-# language ConstraintKinds #-}
-{-# language ExistentialQuantification #-}
-{-# language GeneralizedNewtypeDeriving #-}
-{-# language RankNTypes #-}
-{-# language TypeFamilies #-}
 
 {-# options_ghc -Wno-name-shadowing #-}
 

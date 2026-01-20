@@ -1,4 +1,3 @@
-{-# language MultiParamTypeClasses #-}
 
 -- | Backpack signature for AttrSet operations.
 --
@@ -9,6 +8,7 @@ signature Nix.AttrSet.Sig where
 
 -- Standard library imports for types used in signatures
 import Prelude (Applicative, Bool, Eq, Foldable, Functor, Int, Maybe, Monoid, Ord, Read, Semigroup, Show, Traversable)
+import Data.Kind (Type)
 import Nix.Types.VarName (VarName)
 import Codec.Serialise (Serialise)
 import Control.DeepSeq (NFData, NFData1)
@@ -26,6 +26,7 @@ import Data.Semialign.Indexed (SemialignWithIndex)
 
 -- | Abstract attribute set type.
 -- The concrete implementation is selected at link time via Backpack mixins.
+type AttrSet :: Type -> Type
 data AttrSet a
 
 -- * Core operations

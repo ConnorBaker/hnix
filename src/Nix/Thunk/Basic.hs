@@ -1,5 +1,3 @@
-{-# language ConstraintKinds #-}
-{-# language UndecidableInstances #-}
 {-# options_ghc -Wno-unused-do-bind #-}
 
 -- | Basic thunk implementation for lazy evaluation with memoization.

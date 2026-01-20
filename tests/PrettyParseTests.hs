@@ -1,5 +1,3 @@
-{-# language DataKinds #-}
-{-# language MonoLocalBinds #-}
 {-# language NoMonomorphismRestriction #-}
 
 

@@ -1,10 +1,5 @@
 {-# language CPP #-}
-{-# language DataKinds #-}
-{-# language ExistentialQuantification #-}
-{-# language GADTs #-}
-{-# language NamedFieldPuns #-}
 {-# language RecordWildCards #-}
-{-# language TypeApplications #-}
 
 module Nix.Effects.Derivation
   ( defaultDerivationStrict

@@ -1,10 +1,5 @@
-{-# language UndecidableInstances #-}
-{-# language AllowAmbiguousTypes #-}
-{-# language ConstraintKinds #-}
 {-# language DefaultSignatures #-}
 {-# language FunctionalDependencies #-}
-{-# language GeneralizedNewtypeDeriving #-}
-{-# language TypeFamilies #-}
 
 module Nix.Scope where
 

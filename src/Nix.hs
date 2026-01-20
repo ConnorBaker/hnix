@@ -1,6 +1,3 @@
-{-# language AllowAmbiguousTypes #-}
-{-# language DataKinds #-}
-{-# language KindSignatures #-}
 
 module Nix
   ( module Nix.Cache

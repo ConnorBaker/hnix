@@ -1,5 +1,3 @@
-{-# language ConstraintKinds #-}
-{-# language ExistentialQuantification #-}
 
 -- | Definitions of Frames. Frames are messages that gather and ship themself
 -- with a context related to the message. For example - the message about some

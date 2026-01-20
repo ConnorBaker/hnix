@@ -1,13 +1,7 @@
-{-# language AllowAmbiguousTypes #-}
 {-# language CPP #-}
-{-# language ConstraintKinds #-}
-{-# language DataKinds #-}
-{-# language KindSignatures #-}
-{-# language MonoLocalBinds #-}
 {-# language PartialTypeSignatures #-}
 {-# language QuasiQuotes #-}
 {-# language TemplateHaskell #-}
-{-# language UndecidableInstances #-}
 
 {-# options_ghc -fno-warn-name-shadowing #-}
 

@@ -1,9 +1,3 @@
-{-# language ConstraintKinds #-}
-{-# language DataKinds #-}
-{-# language GeneralizedNewtypeDeriving #-}
-{-# language KindSignatures #-}
-{-# language TypeFamilies #-}
-{-# language UndecidableInstances #-}
 
 {-# options_ghc -fno-warn-name-shadowing #-}
 {-# options_ghc -Wno-missing-methods #-}

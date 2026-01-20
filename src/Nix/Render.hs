@@ -1,9 +1,5 @@
-{-# language UndecidableInstances #-}
 {-# language CPP #-}
-{-# language ConstraintKinds #-}
 {-# language DefaultSignatures #-}
-{-# language TypeFamilies #-}
-{-# language TypeOperators #-}
 {-# language MultiWayIf #-}
 
 module Nix.Render where

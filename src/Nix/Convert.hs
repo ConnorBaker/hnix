@@ -1,8 +1,4 @@
-{-# language AllowAmbiguousTypes #-}
-{-# language ConstraintKinds #-}
 {-# language IncoherentInstances #-}
-{-# language TypeFamilies #-}
-{-# language UndecidableInstances #-}
 
 {-# options_ghc -fno-warn-name-shadowing #-}
 

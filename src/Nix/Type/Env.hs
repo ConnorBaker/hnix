@@ -1,4 +1,3 @@
-{-# language TypeFamilies #-}
 
 module Nix.Type.Env
   ( Env(..)

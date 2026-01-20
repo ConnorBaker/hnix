@@ -1,11 +1,4 @@
-{-# language AllowAmbiguousTypes #-}
-{-# language DataKinds #-}
-{-# language GeneralizedNewtypeDeriving #-}
 {-# language PatternSynonyms #-}
-{-# language ScopedTypeVariables #-}
-{-# language TypeApplications #-}
-{-# language TypeFamilies #-}
-{-# language UndecidableInstances #-}
 
 module Nix.Cited.Basic
   ( Cited(..)

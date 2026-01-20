@@ -1,5 +1,3 @@
-{-# language DataKinds #-}
-{-# language RankNTypes #-}
 
 module TestCommon
   ( -- * Test-specific type aliases

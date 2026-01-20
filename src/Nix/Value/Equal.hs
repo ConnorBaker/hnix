@@ -1,6 +1,3 @@
-{-# language AllowAmbiguousTypes #-}
-{-# language ConstraintKinds #-}
-{-# language TypeFamilies #-}
 
 {-# options_ghc -Wno-missing-pattern-synonym-signatures #-}
 

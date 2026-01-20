@@ -15,6 +15,7 @@ signature Nix.List.Sig where
 
 -- Standard library imports for types used in signatures
 import Prelude (Bool, Eq, Functor, Int, Maybe, Monad, Monoid, Ord, Semigroup, Show, Foldable, Traversable)
+import Data.Kind (Type)
 import Control.DeepSeq (NFData)
 import Data.Functor.Classes (Eq1, Show1)
 import Data.Hashable (Hashable)
@@ -22,6 +23,7 @@ import Data.Semialign (Align, Semialign)
 
 -- | Abstract list type for Nix list values.
 -- The concrete implementation is selected at link time via Backpack mixins.
+type NixList :: Type -> Type
 data NixList a
 
 -- * Nix builtin equivalents (monadic)

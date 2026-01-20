@@ -1,6 +1,4 @@
 {-# language CPP #-}
-{-# language DataKinds #-}
-{-# language GADTs #-}
 {-# language PackageImports #-}
 
 module Nix.Effects.Basic where

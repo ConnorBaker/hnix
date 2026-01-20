@@ -1,10 +1,6 @@
 {-# language DeriveAnyClass     #-}
-{-# language KindSignatures     #-}
-{-# language MonoLocalBinds     #-}
 {-# language PatternSynonyms    #-}
-{-# language RankNTypes         #-}
 {-# language TemplateHaskell    #-}
-{-# language TypeApplications   #-}
 
 -- | The source location annotated nix expression type and supporting types.
 --

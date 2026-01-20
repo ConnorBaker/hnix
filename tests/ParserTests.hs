@@ -1,6 +1,5 @@
 {-# language QuasiQuotes #-}
 {-# language TemplateHaskell #-}
-{-# language RankNTypes #-}
 {-# language ExtendedDefaultRules #-}
 
 {-# options_ghc -fno-warn-name-shadowing #-}

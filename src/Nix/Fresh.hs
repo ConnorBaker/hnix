@@ -1,7 +1,4 @@
 {-# language CPP #-}
-{-# language GeneralizedNewtypeDeriving #-}
-{-# language TypeFamilies #-}
-{-# language UndecidableInstances #-}
 
 {-# options_ghc -Wno-orphans #-}
 

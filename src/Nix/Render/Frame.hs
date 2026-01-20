@@ -1,8 +1,5 @@
 {-# language CPP #-}
-{-# language AllowAmbiguousTypes #-}
-{-# language ConstraintKinds #-}
 {-# language MultiWayIf #-}
-{-# language TypeFamilies #-}
 
 
 -- | Code for rendering/representation of the messages packaged with their context (Frames).
@@ -28,7 +25,7 @@ import           Text.Megaparsec.Pos        ( sourcePosPretty)
 import qualified Text.Show.Pretty          as PS
 
 renderFrames
-  :: forall v t f e m ann
+  :: forall (v :: Type) t f e m ann
    . ( MonadReader e m
      , Has e Options
      , MonadFile m
@@ -65,7 +62,7 @@ renderFrames frames = case framesToList frames of
       . framePos @v @m
 
 framePos
-  :: forall v (m :: Type -> Type)
+  :: forall (v :: Type) (m :: Type -> Type)
    . (Typeable m, Typeable v)
   => NixFrame
   -> Maybe NSourcePos
@@ -77,7 +74,7 @@ framePos (NixFrame _ f) =
   =<< fromException @(EvalFrame m v) f
 
 renderFrame
-  :: forall v t f e m ann
+  :: forall (v :: Type) t f e m ann
    . ( MonadReader e m
      , Has e Options
      , MonadFile m
