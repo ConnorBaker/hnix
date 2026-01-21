@@ -12,7 +12,7 @@ import           Data.List                      ( partition )
 import           Data.These                     ( These(..) )
 import           Nix.Atoms
 import qualified Nix.Core.AttrSet              as A
-import           Nix.AttrSet.HashMap           ()  -- Import SemialignWithIndex instance
+import           Nix.AttrSet.Vector            ()  -- Import SemialignWithIndex instance
 import           Nix.Convert
 import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated

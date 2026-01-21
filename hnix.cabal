@@ -218,6 +218,27 @@ library hnix-attrset
     , template-haskell >= 2.12
     , unordered-containers >= 0.2.14
 
+-- Vector-based AttrSet implementation (alternative to HashMap)
+library hnix-attrset-vector
+  import: shared-sublibrary
+  visibility: public
+  hs-source-dirs: implementations/attrset-vector
+  exposed-modules: Nix.AttrSet.Vector
+  build-depends:
+      base >= 4.12 && < 5
+    , hnix:hnix-types
+    , aeson >= 2.0
+    , binary >= 0.8
+    , deepseq >= 1.4.3
+    , hashable >= 1.3.0
+    , indexed-traversable >= 0.1.1
+    , relude >= 1.0.0
+    , semialign >= 1.2
+    , serialise >= 0.2
+    , template-haskell >= 2.12
+    , these >= 1.1
+    , vector >= 0.12
+
 -- Internal library for list (no unfilled signatures)
 library hnix-list-internal
   import: shared-sublibrary
@@ -397,20 +418,20 @@ library
   mixins:
     hnix:hnix-core
       requires
-        (Nix.AttrSet.Sig as Nix.AttrSet.HashMap,
+        (Nix.AttrSet.Sig as Nix.AttrSet.Vector,
          Nix.List.Sig as Nix.List.Vector,
          Nix.String.Sig as Nix.String.Text),
     hnix:hnix-string
       requires
-        (Nix.AttrSet.Sig as Nix.AttrSet.HashMap),
+        (Nix.AttrSet.Sig as Nix.AttrSet.Vector),
     hnix:hnix-builtins-list
       requires
-        (Nix.AttrSet.Sig as Nix.AttrSet.HashMap,
+        (Nix.AttrSet.Sig as Nix.AttrSet.Vector,
          Nix.List.Sig as Nix.List.Vector,
          Nix.String.Sig as Nix.String.Text),
     hnix:hnix-builtins-attrset
       requires
-        (Nix.AttrSet.Sig as Nix.AttrSet.HashMap,
+        (Nix.AttrSet.Sig as Nix.AttrSet.Vector,
          Nix.List.Sig as Nix.List.Vector,
          Nix.String.Sig as Nix.String.Text)
   -- Re-export instantiated Backpack modules so dependents can import them
@@ -494,7 +515,7 @@ library
     , array >= 0.4
     -- Sublibraries (implementations provide modules, indefinite packages get instantiated via mixins)
     , hnix:hnix-types
-    , hnix:hnix-attrset
+    , hnix:hnix-attrset-vector
     , hnix:hnix-list
     , hnix:hnix-string
     , hnix:hnix-core
