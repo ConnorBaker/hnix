@@ -3,9 +3,9 @@
 
 -- | VarName type - interned variable names for efficient comparison.
 --
--- Variable names are interned using the Symbolize library for O(log n)
--- creation and O(1) comparison. This significantly reduces memory usage
--- when the same variable names appear multiple times.
+-- Variable names are interned using the @intern@ package for O(1) comparison
+-- and reduced memory usage. The intern table never garbage collects entries,
+-- ensuring stable IDs for the lifetime of the program.
 module Nix.Types.VarName
   ( VarName(..)
   , mkVarName
@@ -13,8 +13,8 @@ module Nix.Types.VarName
   ) where
 
 import           Relude
-import           Symbolize                      (Symbol)
-import qualified Symbolize
+import           Data.Interned.Text             (InternedText)
+import           Data.Interned                  (intern, unintern)
 import           Codec.Serialise                (Serialise)
 import qualified Codec.Serialise               as Serialise
 import qualified Data.Binary                   as Binary
@@ -27,21 +27,38 @@ import qualified Text.Read
 import           Text.Read                      (parens, lexP)
 import qualified Language.Haskell.TH.Syntax    as TH
 
--- | Variable name type, backed by an interned Symbol.
-newtype VarName = VarName { getVarNameSymbol :: Symbol }
+-- | Variable name type, backed by an interned Text.
+--
+-- Uses the @intern@ package for hash-consing, enabling O(1) equality
+-- comparison via pointer equality of the interned representation.
+--
+-- Note: Eq and Hashable use the interned ID for O(1) operations,
+-- but Ord uses lexicographic text comparison for deterministic ordering.
+newtype VarName = VarName { getVarNameInterned :: InternedText }
   deriving stock (Generic)
-  deriving newtype (Eq, Ord, NFData, Hashable)
+  deriving newtype (Eq, Hashable)
 
--- | Create a VarName from Text by interning it as a Symbol.
--- O(log n) where n is the number of unique symbols.
+-- | Ord compares lexicographically by text content for deterministic ordering.
+-- This is important for Nix semantics where attrNames returns sorted names.
+instance Ord VarName where
+  compare v1 v2 = compare (varNameText v1) (varNameText v2)
+  {-# INLINE compare #-}
+
+-- | NFData for VarName - the InternedText is already strict.
+instance NFData VarName where
+  rnf (VarName !_) = ()
+  {-# INLINE rnf #-}
+
+-- | Create a VarName from Text by interning it.
+-- O(1) amortized for repeated lookups.
 mkVarName :: Text -> VarName
-mkVarName = VarName . Symbolize.intern
+mkVarName = VarName . intern
 {-# INLINABLE mkVarName #-}
 
 -- | Extract the Text from a VarName.
 -- O(1) operation.
 varNameText :: VarName -> Text
-varNameText = Symbolize.unintern . getVarNameSymbol
+varNameText = unintern . getVarNameInterned
 {-# INLINABLE varNameText #-}
 
 instance IsString VarName where
@@ -84,7 +101,7 @@ instance ToJSONKey VarName where
 instance FromJSONKey VarName where
   fromJSONKey = FromJSONKeyText mkVarName
 
--- Data instance needs manual implementation since Symbol doesn't have Data
+-- Data instance needs manual implementation since InternedText doesn't have Data
 instance Data VarName where
   gfoldl k z v = z mkVarName `k` varNameText v
   gunfold k z _ = k (z mkVarName)

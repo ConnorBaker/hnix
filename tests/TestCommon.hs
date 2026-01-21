@@ -14,6 +14,8 @@ module TestCommon
   , assertEvalMatchesNix
   , assertEvalFileMatchesNix
   , assertEvalTextMatchesNix
+    -- * Environment isolation
+  , withEnv
   ) where
 
 import           Nix.Prelude
@@ -23,7 +25,9 @@ import           Data.Time
 import           Data.Text.IO as Text
 import           Nix
 import           Nix.Standard
-import           System.Environment
+import           System.Environment             ( setEnv
+                                                , unsetEnv
+                                                )
 import           System.IO
 import           System.PosixCompat.Files
 import           System.PosixCompat.Temp
@@ -44,6 +48,20 @@ type StdThun = ThunkF 'False StandardIO
 runWithBasicEffectsIO :: Options -> (GivenStdInterned 'False DefaultCfg IO => StdM 'False DefaultCfg IO a) -> IO a
 runWithBasicEffectsIO = runWithBasicEffects
 
+-- | Run an action with a temporarily modified environment variable.
+-- Restores the original value (or unsets) after the action completes.
+-- Uses bracket to ensure cleanup even on exceptions.
+withEnv :: String -> String -> IO a -> IO a
+withEnv name value action = bracket setup restore (const action)
+ where
+  setup = do
+    old <- lookupEnv name
+    setEnv name value
+    pure old
+  restore old = case old of
+    Nothing -> unsetEnv name
+    Just v  -> setEnv name v
+
 hnixEvalFile :: Options -> Path -> IO StdVal
 hnixEvalFile opts file =
   do
@@ -51,8 +69,7 @@ hnixEvalFile opts file =
     either
       (\ err -> fail $ "Parsing failed for file `" <> coerce file <> "`.\n" <> show err)
       (\ expr ->
-        do
-          setEnv "TEST_VAR" "foo"
+        withEnv "TEST_VAR" "foo" $
           runWithBasicEffects opts $
             evaluateExpression (pure $ coerce file) nixEvalExprLoc normalForm expr
               `catch`

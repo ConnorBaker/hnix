@@ -85,7 +85,7 @@ common shared
     , relude >= 1.0.0
     , serialise >= 0.2.1
     , singleton-bool >= 0.1.5
-    , symbolize >= 1.0.0
+    , intern >= 0.9
     , template-haskell >= 2.13
     , time >= 1.9.3
     , unix >= 2.7
@@ -146,7 +146,7 @@ library hnix-types
     , megaparsec >= 7.0
     , relude >= 1.0.0
     , serialise >= 0.2.1
-    , symbolize >= 1.0.0
+    , intern >= 0.9
     , template-haskell >= 2.13
     , text >= 1.2.3
 

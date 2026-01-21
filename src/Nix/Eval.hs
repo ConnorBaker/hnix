@@ -336,7 +336,7 @@ evalBinds isRecursive binds =
                   Just p2 -> p2
               , demand v
               )
-            ) <$> A.toList o'
+            ) <$> sortOn fst (A.toList o')
           -- Include __overrides itself (not overwriting, use original position/value)
           selfEntry =
             ( False  -- don't allow overwriting __overrides itself

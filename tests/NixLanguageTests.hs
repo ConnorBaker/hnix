@@ -24,7 +24,6 @@ import           System.Directory               ( createDirectoryIfMissing
                                                 , doesPathExist
                                                 , removeFile
                                                 )
-import           System.Environment             ( setEnv )
 import           System.FilePath.Glob           ( compile
                                                 , globDir1
                                                 )
@@ -258,33 +257,28 @@ assertLangOkXml opts fileBaseName =
     assertEqual mempty expected actual
 
 assertEval :: Options -> [Path] -> Assertion
-assertEval _opts files =
-  do
-    time <- liftIO getCurrentTime
-    let opts = defaultOptions time
-    case delete ".nix" $ sort $ fromString @Text . takeExtensions <$> files of
-      []                  -> void $ hnixEvalFile opts $ addNixExt name
-      [".exp"          ]  -> assertLangOk    opts name
-      [".exp.xml"      ]  -> assertLangOkXml opts name
-      [".exp.disabled" ]  -> stub
-      [".exp-disabled" ]  -> stub
-      [".exp", ".flags"]  ->
-        do
-          liftIO $ setEnv "NIX_PATH" "lang/dir3:lang/dir4"
-          flags <- read name ".flags"
-          let
-            flags' :: Text
-            flags' =
-              bool
-                id
-                Text.init
-                (Text.last flags == '\n')
-                flags
-          case runParserGetResult time flags' of
-            Opts.Failure           err   -> errorWithoutStackTrace $ "Error parsing flags from " <> coerce name <> ".flags: " <> show err
-            Opts.CompletionInvoked _     -> fail "unused"
-            Opts.Success           opts' -> assertLangOk opts' name
-      _ -> assertFailure $ "Unknown test type " <> show files
+assertEval opts files =
+  case delete ".nix" $ sort $ fromString @Text . takeExtensions <$> files of
+    []                  -> void $ hnixEvalFile opts $ addNixExt name
+    [".exp"          ]  -> assertLangOk    opts name
+    [".exp.xml"      ]  -> assertLangOkXml opts name
+    [".exp.disabled" ]  -> stub
+    [".exp-disabled" ]  -> stub
+    [".exp", ".flags"]  ->
+      withEnv "NIX_PATH" "lang/dir3:lang/dir4" $ do
+        time <- getCurrentTime
+        flags <- read name ".flags"
+        let
+          flags' :: Text
+          flags' =
+            if Text.last flags == '\n'
+              then Text.init flags
+              else flags
+        case runParserGetResult time flags' of
+          Opts.Failure           err   -> errorWithoutStackTrace $ "Error parsing flags from " <> coerce name <> ".flags: " <> show err
+          Opts.CompletionInvoked _     -> fail "unused"
+          Opts.Success           opts' -> assertLangOk opts' name
+    _ -> assertFailure $ "Unknown test type " <> show files
  where
   runParserGetResult :: UTCTime -> Text -> Opts.ParserResult Options
   runParserGetResult time flags' =
