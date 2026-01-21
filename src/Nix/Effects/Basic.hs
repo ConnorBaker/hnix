@@ -44,6 +44,15 @@ import           Nix.String
 import           Nix.Value
 import           Nix.Value.Monad
 import           Nix.Options
+import           Nix.Types.VarName.Static       ( sCurFile, sNixPathVar, sPrefix
+                                                , sPath, sUri, sUrl, sSha256, sHash
+                                                , sName, sType, sOutPath, sNarHash
+                                                , sSubmodules, sRev, sShortRev
+                                                , sRevCount, sLastModified
+                                                , sLastModifiedDate, sRef, sShallow
+                                                , sAllRefs, sDirtyRev, sDirtyShortRev
+                                                , sKey
+                                                )
 
 import qualified System.Directory              as Directory
 import qualified System.FilePath               as FP
@@ -74,7 +83,7 @@ defaultToAbsolutePath origPath =
       if isAbsolute origPathExpanded
         then pure origPathExpanded
         else do
-          mCurFile <- lookupVar "__cur_file"
+          mCurFile <- lookupVar sCurFile
           dir <-
             case mCurFile of
               Nothing -> getCurrentDirectory
@@ -119,7 +128,7 @@ defaultFindEnvPath = findEnvPathM . coerce
 findEnvPathM :: forall e t f m . MonadNix e t f m => Path -> m Path
 findEnvPathM name =
   do
-    mres <- lookupVar "__nixPath"
+    mres <- lookupVar sNixPathVar
     case mres of
       Nothing -> fail "impossible"
       Just v -> do
@@ -167,7 +176,7 @@ findPathBy finder ls name =
         p <- resolvePath s
         path <- fromValue =<< demand p
 
-        case A.lookup "prefix" s of
+        case A.lookup sPrefix s of
           Nothing -> tryPath path mempty
           Just nv' -> do
             mns <- fromValueMay @NixString =<< demand nv'
@@ -186,10 +195,10 @@ findPathBy finder ls name =
 
   resolvePath :: AttrSet (NValue t f m) -> m (NValue t f m)
   resolvePath s =
-    case A.lookup "path" s of
+    case A.lookup sPath s of
       Just v -> pure v
       Nothing ->
-        case A.lookup "uri" s of
+        case A.lookup sUri s of
           Just uriVal -> defer . fetchTarball $ uriVal
           Nothing ->
             throwError $ ErrorCall $ "__nixPath must be a list of attr sets with 'path' elements, but received: " <> show s
@@ -202,12 +211,12 @@ fetchTarball
 fetchTarball =
   \case
     NVSet _ s -> do
-      urlVal <- case A.lookup "url" s of
+      urlVal <- case A.lookup sUrl s of
         Nothing -> throwError $ ErrorCall "builtins.fetchTarball: Missing url attribute"
         Just v -> pure v
       url <- fromValue =<< demand urlVal
-      mShaVal <- traverse (fromValue <=< demand) (A.lookup "sha256" s <|> A.lookup "hash" s)
-      mNameVal <- traverse (fromValue <=< demand) (A.lookup "name" s)
+      mShaVal <- traverse (fromValue <=< demand) (A.lookup sSha256 s <|> A.lookup sHash s)
+      mNameVal <- traverse (fromValue <=< demand) (A.lookup sName s)
       fetch url mShaVal mNameVal
     NVStr ns -> fetch (ignoreContext ns) Nothing Nothing
     v -> throwError $ ErrorCall $ "builtins.fetchTarball: Expected URI or set, got " <> show v
@@ -389,7 +398,7 @@ fetchTree =
   in
   \case
     NVSet _ s -> do
-      typeVal <- case A.lookup "type" s of
+      typeVal <- case A.lookup sType s of
         Nothing -> throwError $ ErrorCall "builtins.fetchTree: missing type"
         Just v -> pure v
       typ <- fromValue =<< demand typeVal
@@ -435,21 +444,21 @@ fetchGitFromSet
   -> AttrSet (NValue t f m)
   -> m (NValue t f m)
 fetchGitFromSet mode s = do
-  urlVal <- case A.lookup "url" s of
+  urlVal <- case A.lookup sUrl s of
     Nothing -> throwError $ ErrorCall "builtins.fetchGit: Missing url attribute"
     Just v -> pure v
   url <- extractUrlLike =<< demand urlVal
-  mNameVal <- traverse (fromValue <=< demand) (A.lookup "name" s)
+  mNameVal <- traverse (fromValue <=< demand) (A.lookup sName s)
   when (not (fgAllowName mode) && isJust mNameVal) $
-    throwError $ ErrorCall "builtins.fetchTree: argument 'name' isn’t supported"
-  mRevVal <- traverse (fromValue <=< demand) (A.lookup "rev" s)
-  mRefVal <- traverse (fromValue <=< demand) (A.lookup "ref" s)
-  mSubVal <- traverse (fromValue <=< demand) (A.lookup "submodules" s)
-  mShallowVal <- traverse (fromValue <=< demand) (A.lookup "shallow" s)
+    throwError $ ErrorCall "builtins.fetchTree: argument 'name' isn't supported"
+  mRevVal <- traverse (fromValue <=< demand) (A.lookup sRev s)
+  mRefVal <- traverse (fromValue <=< demand) (A.lookup sRef s)
+  mSubVal <- traverse (fromValue <=< demand) (A.lookup sSubmodules s)
+  mShallowVal <- traverse (fromValue <=< demand) (A.lookup sShallow s)
   mExportIgnoreVal <- traverse (fromValue <=< demand) (A.lookup "exportIgnore" s)
-  mAllRefsVal <- traverse (fromValue <=< demand) (A.lookup "allRefs" s)
+  mAllRefsVal <- traverse (fromValue <=< demand) (A.lookup sAllRefs s)
   mLfsVal <- traverse (fromValue <=< demand) (A.lookup "lfs" s)
-  mNarHashVal <- traverse (fromValue <=< demand) (A.lookup "narHash" s)
+  mNarHashVal <- traverse (fromValue <=< demand) (A.lookup sNarHash s)
   mVerifyCommitVal <- traverse (fromValue <=< demand) (A.lookup "verifyCommit" s)
   mKeyTypeVal <- traverse (fromValue <=< demand) (A.lookup "keytype" s)
   mPublicKeyVal <- traverse (fromValue <=< demand) (A.lookup "publicKey" s)
@@ -526,9 +535,9 @@ buildFetchGitAttrs mode args res = do
   narHashVal <- (toValue (fgrNarHash res) :: m (NValue t f m))
   subVal <- (toValue (fgSubmodules args) :: m (NValue t f m))
   let attrsBase :: [(VarName, NValue t f m)] =
-        [ ("outPath", outPathVal)
-        , ("narHash", narHashVal)
-        , ("submodules", subVal)
+        [ (sOutPath, outPathVal)
+        , (sNarHash, narHashVal)
+        , (sSubmodules, subVal)
         ]
 
   let emptyRev = "0000000000000000000000000000000000000000"
@@ -547,7 +556,7 @@ buildFetchGitAttrs mode args res = do
                 Nothing -> 0 :: Integer
                 Just v -> v
         revCountVal <- (toValue revCountText :: m (NValue t f m))
-        pure [("rev", revVal), ("shortRev", shortRevVal), ("revCount", revCountVal)]
+        pure [(sRev, revVal), (sShortRev, shortRevVal), (sRevCount, revCountVal)]
       else case fgrRevInfo res of
         Nothing -> pure []
         Just ri -> do
@@ -557,13 +566,13 @@ buildFetchGitAttrs mode args res = do
             Nothing -> pure []
             Just rc -> do
               rcVal <- (toValue rc :: m (NValue t f m))
-              pure [("revCount", rcVal)]
-          pure $ [("rev", revVal), ("shortRev", shortRevVal)] <> revCountAttrs
+              pure [(sRevCount, rcVal)]
+          pure $ [(sRev, revVal), (sShortRev, shortRevVal)] <> revCountAttrs
 
   dirtyAttrs <- do
     let mk k v = (k,) <$> (toValue v :: m (NValue t f m))
-    d1 <- traverse (mk "dirtyRev") (fgrDirtyRev res)
-    d2 <- traverse (mk "dirtyShortRev") (fgrDirtyShortRev res)
+    d1 <- traverse (mk sDirtyRev) (fgrDirtyRev res)
+    d2 <- traverse (mk sDirtyShortRev) (fgrDirtyShortRev res)
     pure $ catMaybes [d1, d2]
 
   let lastMod = fgrLastModified res
@@ -572,8 +581,8 @@ buildFetchGitAttrs mode args res = do
   lastModVal <- (toValue (lastMod :: Integer) :: m (NValue t f m))
   lastModDateVal <- (toValue dateText :: m (NValue t f m))
   let lastModAttrs =
-        [ ("lastModified", lastModVal)
-        , ("lastModifiedDate", lastModDateVal)
+        [ (sLastModified, lastModVal)
+        , (sLastModifiedDate, lastModDateVal)
         ]
 
   toValue (A.fromList (attrsBase <> revAttrs <> dirtyAttrs <> lastModAttrs) :: AttrSet (NValue t f m))
@@ -1171,11 +1180,11 @@ parsePublicKeys defaultType mKey mKeysList = do
     v <- demand val
     case v of
       NVSet _ attrs -> do
-        keyVal <- case A.lookup "key" attrs of
+        keyVal <- case A.lookup sKey attrs of
           Nothing -> throwError $ ErrorCall "builtins.fetchGit: publicKeys entry missing 'key'"
           Just keyVal' -> pure keyVal'
         keyText <- fromValue =<< demand keyVal
-        let typeVal = A.lookup "type" attrs
+        let typeVal = A.lookup sType attrs
         typ <- case typeVal of
           Nothing -> pure defaultType
           Just tv -> fromValue =<< demand tv

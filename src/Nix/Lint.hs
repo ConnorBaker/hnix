@@ -27,6 +27,7 @@ import           Nix.Eval                       ( MonadEval(..) )
 import qualified Nix.Eval                      as Eval
 import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
+import           Nix.Types.VarName.Static       ( sFile, sLine, sCol )
 import           Nix.Frames
 import           Nix.Fresh
 import           Nix.String
@@ -317,7 +318,7 @@ instance MonadLint e m => MonadEval (Symbolic m) m where
       f <- mkSymbolic1 TPath
       l <- mkSymbolic1 $ TConstant $ one TInt
       c <- mkSymbolic1 $ TConstant $ one TInt
-      mkSymbolic1 $ TSet . pure $ A.fromList [(mkVarName "file", f), (mkVarName "line", l), (mkVarName "col", c)]
+      mkSymbolic1 $ TSet . pure $ A.fromList [(sFile, f), (sLine, l), (sCol, c)]
 
   evalConstant c = mkSymbolic1 $ fun c
    where

@@ -42,6 +42,7 @@ import           Control.Monad.Catch            ( MonadThrow )
 import           Nix.Core.Value.Protocol        ( NValue )
 import qualified Nix.Core.Value.Protocol       as V
 import           Nix.Types.VarName              ( VarName, varNameText, mkVarName )
+import           Nix.Types.VarName.Static       ( sName, sValue )
 
 -- * Constraint aliases
 
@@ -235,11 +236,11 @@ listToAttrsNix list = do
   extractPair elem = do
     attrs <- V.demandAttrSet "builtins.listToAttrs" elem
     -- Get "name" attribute
-    case V.attrSetLookup (mkVarName "name") attrs of
+    case V.attrSetLookup (sName) attrs of
       Nothing -> V.throwTypeError "builtins.listToAttrs: element missing 'name' attribute"
       Just nameVal -> do
         key <- V.demandString "builtins.listToAttrs" nameVal
         -- Get "value" attribute
-        case V.attrSetLookup (mkVarName "value") attrs of
+        case V.attrSetLookup (sValue) attrs of
           Nothing -> V.throwTypeError "builtins.listToAttrs: element missing 'value' attribute"
           Just val -> pure (mkVarName key, val)

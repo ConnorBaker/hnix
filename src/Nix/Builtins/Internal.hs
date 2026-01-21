@@ -73,6 +73,7 @@ import           Nix.Scope
 import           Nix.Value
 import           Nix.Value.Interned             ( internedBool, internedNull )
 import           Nix.Value.Monad
+import           Nix.Types.VarName.Static       ( sIncludes )
 
 -- * Internal types
 
@@ -172,7 +173,7 @@ foldNixPath
   -> m r
 foldNixPath z f =
   do
-    mres <- lookupVar "__includes"
+    mres <- lookupVar sIncludes
     dirs <-
       case mres of
         Nothing -> stub

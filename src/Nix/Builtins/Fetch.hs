@@ -29,7 +29,7 @@ import           Nix.Core.List                  ( NixList )
 import qualified Nix.Core.List                 as L
 import           Nix.Effects
 import           Nix.Exec
-import           Nix.Expr.Types                 ( mkVarName )
+import           Nix.Types.VarName.Static       ( sUrls, sUrl, sHash, sSha256, sName, sExecutable )
 import           Nix.Frames
 import           Nix.Options
 import           Nix.String
@@ -64,15 +64,15 @@ fetchurlNix
 fetchurlNix =
   (\case
     NVSet _ s -> do
-      let mUrlsVal = A.lookup (mkVarName "urls") s <|> A.lookup (mkVarName "url") s
+      let mUrlsVal = A.lookup sUrls s <|> A.lookup sUrl s
       urlsVal <- case mUrlsVal of
         Nothing -> throwError $ ErrorCall "builtins.fetchurl: missing url(s)"
         Just v -> pure v
       urls <- extractUrls =<< demand urlsVal
-      mHashVal <- traverse (fromValue <=< demand) (A.lookup (mkVarName "hash") s)
-      mShaVal <- traverse (fromValue <=< demand) (A.lookup (mkVarName "sha256") s)
-      mNameVal <- traverse (fromValue <=< demand) (A.lookup (mkVarName "name") s)
-      mExecVal <- traverse (fromValue <=< demand) (A.lookup (mkVarName "executable") s)
+      mHashVal <- traverse (fromValue <=< demand) (A.lookup sHash s)
+      mShaVal <- traverse (fromValue <=< demand) (A.lookup sSha256 s)
+      mNameVal <- traverse (fromValue <=< demand) (A.lookup sName s)
+      mExecVal <- traverse (fromValue <=< demand) (A.lookup sExecutable s)
       fetchUrls mHashVal mShaVal mNameVal
         (case mExecVal of
           Nothing -> False

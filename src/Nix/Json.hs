@@ -17,6 +17,7 @@ import           Nix.String
 import           Nix.Value
 import           Nix.Value.Monad
 import           Nix.Expr.Types
+import           Nix.Types.VarName.Static       ( sToString )
 
 -- This was moved from Utils.
 toEncodingSorted :: A.Value -> A.Encoding
@@ -52,7 +53,7 @@ toJSON = \case
   NVList l -> A.Array . V.fromList <$> traverse intoJson (L.toList l)
   NVSet pos m ->
     -- First check for __toString, then outPath, then normal object encoding
-    case A.lookup (mkVarName "__toString") m of
+    case A.lookup (sToString) m of
       Just toStringFn -> do
         -- Call __toString with self (the set itself)
         -- callFunc handles demanding the thunk internally

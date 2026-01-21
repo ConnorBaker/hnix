@@ -29,7 +29,7 @@ import           Nix.Builtins.Internal          ( pattern NVBool )
 import           Nix.Convert
 import           Nix.Effects
 import           Nix.Exec
-import           Nix.Expr.Types                 ( mkVarName )
+import           Nix.Types.VarName.Static       ( sSuccess, sValue )
 import           Nix.Frames
 import           Nix.Normal
 import           Nix.Options
@@ -56,8 +56,8 @@ tryEvalNix e = (`catch` (pure . onError))
     NVSet
       mempty
       $ A.fromList
-        [ (mkVarName "success", NVBool True)
-        , (mkVarName "value"  , v            )
+        [ (sSuccess, NVBool True)
+        , (sValue  , v            )
         ]
 
   onError :: SomeException -> NValue t f m
@@ -65,10 +65,9 @@ tryEvalNix e = (`catch` (pure . onError))
     NVSet
       mempty
       $ A.fromList
-        $ (\n -> (mkVarName n, NVBool False)) <$>
-          [ "success"
-          , "value"
-          ]
+        [ (sSuccess, NVBool False)
+        , (sValue  , NVBool False)
+        ]
 
 -- | Add error context (currently a no-op in HNix).
 addErrorContextNix

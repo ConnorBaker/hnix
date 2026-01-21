@@ -28,6 +28,7 @@ import           Nix.String
 import           Nix.Thunk
 import           Nix.Value
 import qualified Nix.Core.List                 as L
+import           Nix.Types.VarName.Static       ( sType, sDrvPath, sOutPath )
 
 -- | This type represents a pretty printed nix expression
 -- together with some information about the expression.
@@ -456,13 +457,13 @@ derivationDoc =
   \case
     NVSet _ s -> do
       let hasType =
-            case A.lookup "type" s of
+            case A.lookup sType s of
               Just (NVStr ty) -> ignoreContext ty == "derivation"
               _ -> False
-      let hasDrv = A.member "drvPath" s
-      let hasOut = A.member "outPath" s
+      let hasDrv = A.member sDrvPath s
+      let hasOut = A.member sOutPath s
       guard (hasType || (hasDrv && hasOut))
-      let mDrv = A.lookup "drvPath" s >>= valueToText
+      let mDrv = A.lookup sDrvPath s >>= valueToText
       pure $
         case mDrv of
           Just drv -> "«derivation " <> pretty drv <> "»"

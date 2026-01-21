@@ -47,6 +47,7 @@ import           Nix.Builtins.Internal          ( WValue(..)
 import           Nix.Convert
 import           Nix.Exec
 import           Nix.Expr.Types                 ( AttrSet, mkVarName, emptyPositionSet )
+import           Nix.Types.VarName.Static       ( sStartSet, sOperator, sRight, sWrong )
 import           Nix.Frames
 import           Nix.Value
 import           Nix.Value.Equal                ( valueEqM, checkComparable )
@@ -344,7 +345,7 @@ genericClosureNix c =
   do
   s <- fromValue @(AttrSet (NValue t f m)) c
 
-  case (A.lookup (mkVarName "startSet") s, A.lookup (mkVarName "operator") s) of
+  case (A.lookup sStartSet s, A.lookup sOperator s) of
     (Nothing    , Nothing        ) -> throwError $ ErrorCall "builtins.genericClosure: Attributes 'startSet' and 'operator' required"
     (Nothing    , Just _         ) -> throwError $ ErrorCall "builtins.genericClosure: Attribute 'startSet' required"
     (Just _     , Nothing        ) -> throwError $ ErrorCall "builtins.genericClosure: Attribute 'operator' required"
@@ -434,8 +435,8 @@ partitionNix f nvlst =
     if L.null v
       then toValue @(AttrSet (NValue t f m))
         $ A.fromList
-            [ (mkVarName "right", emptyList)
-            , (mkVarName "wrong", emptyList)
+            [ (sRight, emptyList)
+            , (sWrong, emptyList)
             ]
       else do
         -- Get (Bool, value) pairs
@@ -452,6 +453,6 @@ partitionNix f nvlst =
 
         toValue @(AttrSet (NValue t f m))
           $ A.fromList
-              [ (mkVarName "right", rightList)
-              , (mkVarName "wrong", wrongList)
+              [ (sRight, rightList)
+              , (sWrong, wrongList)
               ]

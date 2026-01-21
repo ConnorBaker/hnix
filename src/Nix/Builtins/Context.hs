@@ -26,6 +26,7 @@ import           Nix.Convert
 import qualified Nix.Core.List                 as L
 import           Nix.Exec
 import           Nix.Expr.Types
+import           Nix.Types.VarName.Static       ( sOutputs, sPath, sAllOutputs )
 import           Nix.Frames
 import           Nix.String
 import           Nix.Value
@@ -87,7 +88,7 @@ appendContextNix tx ty =
 
                         getOutputs :: m [Text]
                         getOutputs =
-                          case A.lookup (mkVarName "outputs") atts of
+                          case A.lookup (sOutputs) atts of
                             Nothing -> stub
                             Just touts -> do
                               outs <- demand touts
@@ -95,8 +96,8 @@ appendContextNix tx ty =
                                 NVList vs -> L.toList <$> traverse (fmap ignoreContext . fromValue) vs
                                 _x -> throwError $ ErrorCall $ "Invalid types for context value outputs in builtins.appendContext: " <> show _x
 
-                      path <- getK "path"
-                      allOutputs <- getK "allOutputs"
+                      path <- getK sPath
+                      allOutputs <- getK sAllOutputs
 
                       NixLikeContextValue path allOutputs <$> getOutputs
 

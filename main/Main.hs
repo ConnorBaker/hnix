@@ -41,10 +41,14 @@ import           Prettyprinter           hiding ( list )
 import           Prettyprinter.Render.Text      ( renderIO )
 import qualified Repl
 import           Nix.Eval
+import           Nix.Types.VarName.Static       ( preInternAll, sDrvPath )
 
 main :: IO ()
 main =
   do
+    -- Pre-intern common VarNames before evaluation begins to avoid
+    -- repeated hash lookups during expression evaluation.
+    preInternAll
     currentTime <- getCurrentTime
     cmd <- execParser $ nixCommandInfo currentTime
 
@@ -120,7 +124,7 @@ evalExprToDrvPath expr = do
       val <- withNixContext mempty $ nixEvalExprLocT mempty parsed
       demanded <- demand val
       case demanded of
-        NVSet _ attrs -> case attrSetLookup (mkVarName "drvPath") attrs of
+        NVSet _ attrs -> case attrSetLookup sDrvPath attrs of
           Just drvPathVal -> do
             drvPathStr <- ignoreContext <$> (fromValue drvPathVal :: StdM prov cfg m NixString)
             pure $ coerce $ toString drvPathStr

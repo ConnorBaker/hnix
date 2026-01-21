@@ -50,6 +50,9 @@ import           Nix.Thunk                      ( MonadThunk(force) )
 import           Nix.Core.List                  ( NixList )
 import qualified Nix.Core.List                 as L
 import qualified Data.Text                     as Text
+import           Nix.Types.VarName.Static       ( sOutPath, sFile, sLine, sColumn
+                                                , sPath, sAllOutputs, sOutputs
+                                                )
 
 newtype Deeper a = Deeper a
   deriving (Functor, Foldable, Traversable)
@@ -259,7 +262,7 @@ instance ( Convertible e t f m
         maybe
           stub
           fromValueMay
-          (A.lookup "outPath" s)
+          (A.lookup sOutPath s)
       _ -> stub
 
   --  2021-07-18: NOTE: There may be cases where conversion wrongly marks the content to have a context.
@@ -301,7 +304,7 @@ instance ( Convertible e t f m
         maybe
           stub
           (fromValueMay @Path)
-          (A.lookup "outPath" s)
+          (A.lookup sOutPath s)
       _ -> stub
 
   fromValue = fromMayToValue TPath
@@ -494,7 +497,7 @@ instance Convertible e t f m
     f' <- toValue $ mkNixStringWithoutContext $ fromString $ coerce f
     l' <- toValue $ unPos $ coerce l
     c' <- toValue $ unPos $ coerce c
-    let pos = A.fromList [("file" :: VarName, f'), ("line", l'), ("column", c')]
+    let pos = A.fromList [(sFile, f'), (sLine, l'), (sColumn, c')]
     pure $ NVSet' mempty pos
 
 -- | List converts to interned empty list when empty.
@@ -585,9 +588,9 @@ instance Convertible e t f m
         (fmap pure . toValue)
         ts
     pure $ NVSet' mempty $ A.fromList $ catMaybes
-      [ ("path"      ,) <$> path
-      , ("allOutputs",) <$> allOutputs
-      , ("outputs"   ,) <$> outputs
+      [ (sPath      ,) <$> path
+      , (sAllOutputs,) <$> allOutputs
+      , (sOutputs   ,) <$> outputs
       ]
 
 instance Convertible e t f m => ToValue () m (NExprF (NValue t f m)) where

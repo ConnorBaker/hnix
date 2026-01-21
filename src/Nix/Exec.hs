@@ -57,6 +57,7 @@ import           Prettyprinter
 import qualified Text.Show.Pretty              as PS
 import qualified GHC.Clock                     as Clock
 import           Data.Data                     ( toConstr )
+import           Nix.Types.VarName.Static       ( sCurPos, sFunctor )
 
 #ifdef MIN_VERSION_ghc_datasize 
 import           GHC.DataSize
@@ -274,7 +275,7 @@ instance (MonadNix e t f m, HasProvCfg (CtxCfg e)) => MonadEval (NValue t f m) m
       STrue -> do
         scope <- askScopes
         addProvenance @_ @_ @(NValue t f m)
-          (Provenance scope . NSymAnnF span $ "__curPos") <$>
+          (Provenance scope . NSymAnnF span $ sCurPos) <$>
             toValue delta
       SFalse -> toValue delta
 
@@ -464,7 +465,7 @@ callFunc fun arg =
               Nothing -> f arg
               Just stats -> withBuiltinTiming stats (varNameText name) (f arg)
       NVClosure _params f -> f arg
-      (NVSet _ m) | Just f <- A.lookup "__functor" m ->
+      (NVSet _ m) | Just f <- A.lookup sFunctor m ->
         (`callFunc` arg) =<< (`callFunc` fun') f
       _x -> throwError $ ErrorCall $ "Attempt to call non-function: " <> show _x
 

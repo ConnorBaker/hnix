@@ -77,6 +77,7 @@ import           Nix.Expr.Strings               ( escapeCodes
                                                 , removeEmptyPlains
                                                 )
 import           Nix.Render                     ( MonadFile() )
+import           Nix.Types.VarName.Static       ( sBody )
 import           Prettyprinter                  ( Doc
                                                 , pretty
                                                 )
@@ -937,7 +938,7 @@ nixLet =
  where
   -- | Expressions `let {..., body = ...}' are just desugared
   -- into `(rec {..., body = ...}).body'.
-  letBody    = (\ expr -> NSelect Nothing expr (one $ StaticKey "body")) <$> attrset
+  letBody    = (\ expr -> NSelect Nothing expr (one $ StaticKey sBody)) <$> attrset
    where
     attrset       = annotateLocation $ NSet Recursive <$> braces nixBinders
   -- | Regular `let`

@@ -50,6 +50,7 @@ import           Nix.Scope
 import           Nix.String
 import           Nix.Value
 import           Nix.Value.Interned             ( internedTrue, internedFalse, internedNull )
+import           Nix.Types.VarName.Static       ( sBuiltins, sIncludes, sCurFile )
 import           Nix.Value.Monad
 
 -- This is a big module. There is recursive reuse:
@@ -374,14 +375,14 @@ withNixContext mpath action =
     opts <- askOptions
 
     pushScope
-      (one ("__includes", NVList $ L.fromList $ mkNVStrWithoutContext . fromString . coerce <$> getInclude opts))
+      (one (sIncludes, NVList $ L.fromList $ mkNVStrWithoutContext . fromString . coerce <$> getInclude opts))
       (pushScopes
         base $
         case mpath of
           Nothing -> action
           Just path -> do
             traceM $ "Setting __cur_file = " <> show path
-            pushScope (one ("__cur_file", NVPath path)) action
+            pushScope (one (sCurFile, NVPath path)) action
       )
 
 builtins
@@ -394,7 +395,7 @@ builtins
 builtins =
   do
     ref <- defer $ NVSet emptyPositionSet <$> buildMap
-    (`pushScope` askScopes) . coerce . A.fromList . ((mkVarName "builtins", ref) :) =<< topLevelBuiltins
+    (`pushScope` askScopes) . coerce . A.fromList . ((sBuiltins, ref) :) =<< topLevelBuiltins
  where
   buildMap :: m (AttrSet (NValue t f m))
   buildMap         =  A.fromList . (mapping <$>) <$> builtinsList

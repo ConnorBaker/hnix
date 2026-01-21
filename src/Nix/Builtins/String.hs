@@ -46,7 +46,8 @@ import           Text.Regex.TDFA                ( Regex
                                                 )
 import           Nix.Atoms                      ( NAtom(..) )
 import qualified Nix.Core.AttrSet              as A
-import           Nix.Expr.Types                 ( AttrSet, mkVarName )
+import           Nix.Expr.Types                 ( AttrSet )
+import           Nix.Types.VarName.Static       ( sName, sVersion, sHashAlgo )
 import qualified Nix.Core.List                 as L
 import           Nix.Builtins.Internal          ( Prim(..)
                                                 , splitVersion
@@ -123,10 +124,10 @@ parseDrvNameNix drvname =
 
     toValue @(AttrSet (NValue t f m)) $
       A.fromList
-        [ ( mkVarName "name"
+        [ ( sName
           , mkNVStr name
           )
-        , ( mkVarName "version"
+        , ( sVersion
           , mkNVStr version
           )
         ]
@@ -432,7 +433,7 @@ convertHashNix nv =
     mAlgoText <-
       traverse
         (fromStringNoContext <=< fromValue <=< demand)
-        (A.lookup (mkVarName "hashAlgo") attrs)
+        (A.lookup (sHashAlgo) attrs)
 
     mAlgo <-
       case mAlgoText of

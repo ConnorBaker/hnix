@@ -55,6 +55,7 @@ import           System.Console.Repline         ( Cmd
 import qualified System.Console.Repline        as Console
 import qualified System.Exit                   as Exit
 import qualified System.IO.Error               as Error
+import           Nix.Types.VarName.Static       ( sBuiltins, sIncludes )
 
 -- | Repl entry point
 main :: (MonadNix e t f m, MonadIO m, MonadMask m, HasProvCfg (CtxCfg e)) =>  m ()
@@ -161,7 +162,7 @@ initState mIni = do
 
   let
     scope = scopeFromList $
-      (mkVarName "builtins", builtins) : fmap (mkVarName "input",) (maybeToList mIni)
+      (sBuiltins, builtins) : fmap (mkVarName "input",) (maybeToList mIni)
 
   opts <- askOptions
 
@@ -422,12 +423,12 @@ completeFunc reversedPrev word
           contextKeys :: [VarName]
           contextKeys = attrSetKeys scopeAttrSet
           builtins :: AttrSet (NValue t f m)
-          (Just (NVSet _ builtins)) = attrSetLookup (mkVarName "builtins") scopeAttrSet
+          (Just (NVSet _ builtins)) = attrSetLookup sBuiltins scopeAttrSet
           shortBuiltins :: [VarName]
           shortBuiltins = attrSetKeys builtins
 
       pure $ listCompletion $ toString <$>
-        one "__includes"
+        one sIncludes
           <> contextKeys
           <> shortBuiltins
 

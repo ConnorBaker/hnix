@@ -30,6 +30,7 @@ import qualified Nix.AttrSet.Sig               as A
 import           Nix.Core.Value.Frames          ( Framed, throwError )
 import           Nix.Core.Value.String          ( NixString, ignoreContext )
 import           Nix.Core.Value.Thunk           ( MonadThunk(..) )
+import           Nix.Types.VarName.Static       ( sType, sOutPath )
 import           Nix.Core.Value                 ( NValue
                                                 , MonadDataErrorContext
                                                 , ValueFrame(Comparison)
@@ -94,7 +95,7 @@ isDerivationM
   -> m Bool
 isDerivationM f m =
   do
-    mtype <- traverse f (A.lookup "type" m)
+    mtype <- traverse f (A.lookup sType m)
     case join mtype of
       Nothing -> pure False
       Just ty ->
@@ -146,7 +147,7 @@ compareAttrSetsM f eq lm rm =
       else compareAttrs
  where
   areDerivations = on (liftA2 (&&)) (isDerivationM f              ) lm rm
-  equalOutPaths  = on (liftA2   eq) (A.lookup "outPath") lm rm
+  equalOutPaths  = on (liftA2   eq) (A.lookup sOutPath) lm rm
   compareAttrs   =     alignEqM eq                                  lm rm
 
 valueEqM

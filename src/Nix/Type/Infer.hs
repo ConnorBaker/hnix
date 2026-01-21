@@ -47,6 +47,7 @@ import qualified Nix.Eval                      as Eval
                                                 , evalWithAttrSet
                                                 )
 import           Nix.Expr.Types
+import           Nix.Types.VarName.Static       ( sFile, sLine, sCol )
 import           Nix.Fresh
 import           Nix.String
 import           Nix.Scope
@@ -414,9 +415,9 @@ instance MonadInfer m => MonadEval (Judgment s) (InferT s m) where
       inferred $
         TSet mempty $
           A.fromList
-            [ (mkVarName "file", typePath)
-            , (mkVarName "line", typeInt )
-            , (mkVarName "col" , typeInt )
+            [ (sFile, typePath)
+            , (sLine, typeInt )
+            , (sCol , typeInt )
             ]
 
   evalConstant c = pure $ inferred $ fun c

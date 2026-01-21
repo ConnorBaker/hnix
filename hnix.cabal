@@ -135,6 +135,7 @@ library hnix-types
     Nix.Types.Path
     Nix.Types.SourcePos
     Nix.Types.VarName
+    Nix.Types.VarName.Static
   build-depends:
       base >= 4.12 && < 5
     , aeson >= 2.0
@@ -572,6 +573,7 @@ executable hnix
     Paths_hnix
   build-depends:
       hnix
+    , hnix:hnix-types
     , aeson
     , aeson-pretty
     , comonad

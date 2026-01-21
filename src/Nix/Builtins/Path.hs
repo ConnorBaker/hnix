@@ -85,6 +85,7 @@ import           Nix.Value
 import           Nix.Value.Interned             ( internedBool, internedNull )
 import           Nix.Value.Monad
 import           Nix.XML
+import           Nix.Types.VarName.Static       ( sPath, sUri, sPrefix, sValue, sCurFile )
 import qualified Toml
 
 
@@ -471,7 +472,7 @@ scopedImportNixWith withNixContext asetArg pathArg =
     path  <- pathToDefaultNix @t @f @m p
     path' <-
       do
-        mres <- lookupVar "__cur_file"
+        mres <- lookupVar sCurFile
         case mres of
           Nothing -> do
             traceM "No known current directory"
@@ -522,10 +523,10 @@ nixPathNix =
                 mempty
                 (NixA.fromList
                   [case ty of
-                    PathEntryPath -> (mkVarName "path", NVPath  p)
-                    PathEntryURI  -> (mkVarName "uri", mkNVStrWithoutContext $ fromString $ coerce p)
+                    PathEntryPath -> (sPath, NVPath  p)
+                    PathEntryURI  -> (sUri, mkNVStrWithoutContext $ fromString $ coerce p)
 
-                  , (mkVarName "prefix", mkNVStrWithoutContext $ maybeToMonoid mn)
+                  , (sPrefix, mkNVStrWithoutContext $ maybeToMonoid mn)
                   ]
                 )
               )
@@ -601,7 +602,7 @@ fromTOMLNix nvtoml = do
   mkTimestamp :: Text -> m (NValue t f m)
   mkTimestamp value = pure $ NVSet emptyPositionSet $ NixA.fromList
     [ (mkVarName "_type", mkNVStrWithoutContext "timestamp")
-    , (mkVarName "value", mkNVStrWithoutContext value)
+    , (sValue, mkNVStrWithoutContext value)
     ]
 
   formatDay :: Time.Day -> Text
