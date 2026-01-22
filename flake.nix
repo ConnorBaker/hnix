@@ -64,6 +64,8 @@
                   ghcOptions = [ "-fobject-determinism" ];
                   # enableLibraryProfiling = true;
                   # profilingDetail = "none";
+                  # Allow using the ghc package (GHC API)
+                  reinstallableLibGhc = true;
                   # Override hnix-store-json source to include upstream test data
                   packages.hnix-store-json.src = final.lib.mkForce (final.runCommand "hnix-store-json-src" {} ''
                     cp -r ${final.hnix-store-json-src}/hnix-store-json $out

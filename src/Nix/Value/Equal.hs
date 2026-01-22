@@ -18,7 +18,7 @@ import           Nix.Thunk
 import           Nix.Value
 import           Nix.Expr.Types                 ( AttrSet )
 import qualified Nix.Core.AttrSet              as A
-import           Nix.AttrSet.Vector            ()  -- Import Align and SemialignWithIndex instances
+import           Nix.AttrSet.FastStringEnv     ()  -- Import Align and SemialignWithIndex instances
 
 checkComparable
   :: ( Framed e m
