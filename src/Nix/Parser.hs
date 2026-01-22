@@ -1,5 +1,6 @@
 {-# language CPP #-}
 {-# language DeriveAnyClass #-}
+{-# language NoStrict #-}
 
 {-# options_ghc -fno-warn-name-shadowing #-}
 
@@ -47,7 +48,6 @@ import           Nix.Prelude             hiding ( (<|>)
                                                 )
 import           Data.Foldable                  ( foldr1 )
 
-import           Control.Monad                  ( msum )
 import           Control.Monad.Combinators.Expr ( makeExprParser
                                                 , Operator( Postfix
                                                           , InfixN
@@ -71,8 +71,7 @@ import           Nix.Expr.Types
 import qualified Nix.Core.AttrSet              as A
 import           Nix.Expr.Shorthands     hiding ( ($>) )
 import           Nix.Expr.Types.Annotated
-import           Nix.Expr.Strings               ( escapeCodes
-                                                , stripIndent
+import           Nix.Expr.Strings               ( stripIndent
                                                 , mergePlain
                                                 , removeEmptyPlains
                                                 )
@@ -117,9 +116,11 @@ annotateLocation1 p =
     end   <- get -- The state set before the last whitespace
 
     pure $ AnnUnit (SrcSpan (toNSourcePos begin) (toNSourcePos end)) res
+{-# INLINEABLE annotateLocation1 #-}
 
 annotateLocation :: Parser (NExprF NExprLoc) -> Parser NExprLoc
 annotateLocation = (annUnitToAnn <$>) . annotateLocation1
+{-# INLINEABLE annotateLocation #-}
 
 annotateNamedLocation :: String -> Parser (NExprF NExprLoc) -> Parser NExprLoc
 annotateNamedLocation name = annotateLocation . label name
@@ -161,18 +162,22 @@ whiteSpace =
  where
   lineCmnt  = skipLineComment' "#"
   blockCmnt = Lexer.skipBlockComment "/*" "*/"
+{-# INLINEABLE whiteSpace #-}
 
 -- | Lexeme is a unit of the language.
 -- Convention is that after lexeme an arbitrary amount of empty entities (space, comments, line breaks) are allowed.
 -- This lexeme definition just skips over superflous @megaparsec: lexeme@ abstraction.
 lexeme :: Parser a -> Parser a
 lexeme p = p <* whiteSpace
+{-# INLINEABLE lexeme #-}
 
 symbol :: Char -> Parser Char
 symbol = lexeme . char
+{-# INLINEABLE symbol #-}
 
 symbols :: Text -> Parser Text
 symbols = lexeme . chunk
+{-# INLINEABLE symbols #-}
 
 -- We restrict the type of 'parens' and 'brackets' here because if they were to
 -- take a 'Parser NExprLoc' argument they would parse additional text which
@@ -282,9 +287,14 @@ nixAntiquoted p =
 
 escapeCode :: Parser Char
 escapeCode =
-  msum
-    [ c <$ char e | (c, e) <- escapeCodes ]
+  '\n' <$ char 'n'
+  <|> '\r' <$ char 'r'
+  <|> '\t' <$ char 't'
+  <|> '"' <$ char '"'
+  <|> '$' <$ char '$'
+  <|> '\\' <$ char '\\'
   <|> anySingle
+{-# INLINE escapeCode #-}
 
 stringChar
   :: Parser ()
@@ -306,7 +316,7 @@ doubleQuoted :: Parser (NString NExprLoc)
 doubleQuoted =
   label "double quoted string" $
     DoubleQuoted . removeEmptyPlains . mergePlain <$>
-      inQuotationMarks (many $ stringChar quotationMark (void $ char '\\') doubleEscape)
+      inQuotationMarks (many doubleStringChar)
   where
   inQuotationMarks :: Parser a -> Parser a
   inQuotationMarks expr = quotationMark *> expr <* quotationMark
@@ -314,8 +324,20 @@ doubleQuoted =
   quotationMark :: Parser ()
   quotationMark = void $ char '"'
 
+  -- Specialized string character parser using takeWhile1P for bulk parsing
+  doubleStringChar :: Parser (Antiquoted Text NExprLoc)
+  doubleStringChar =
+    antiquoted
+    <|> Plain "$$" <$ try (chunk "$$")
+    <|> Plain . one <$> char '$'
+    <|> doubleEscape
+    <|> Plain <$> takeWhile1P (Just "string character") isPlainDoubleChar
+   where
+    isPlainDoubleChar c = c /= '"' && c /= '$' && c /= '\\'
+
   doubleEscape :: Parser (Antiquoted Text r)
   doubleEscape = Plain . one <$> (char '\\' *> escapeCode)
+{-# INLINEABLE doubleQuoted #-}
 
 
 indented :: Parser (NString NExprLoc)
@@ -347,13 +369,16 @@ indented =
   -- | Symbol "''"
   indentedQuotationMark :: Parser ()
   indentedQuotationMark = label "\"''\"" . void $ chunk "''"
+{-# INLINEABLE indented #-}
 
 
 nixString' :: Parser (NString NExprLoc)
 nixString' = label "string" $ lexeme $ doubleQuoted <|> indented
+{-# INLINEABLE nixString' #-}
 
 nixString :: Parser NExprLoc
 nixString = annNStr <$> annotateLocation1 nixString'
+{-# INLINEABLE nixString #-}
 
 
 -- ** Names (variables aka symbols)
@@ -372,9 +397,11 @@ identifier =
         pure varName
  where
   identLetter x = isAlphanumeric x || x == '_' || x == '\'' || x == '-'
+{-# INLINEABLE identifier #-}
 
 nixSym :: Parser NExprLoc
 nixSym = annotateLocation $ mkSymF . varNameText <$> identifier
+{-# INLINEABLE nixSym #-}
 
 
 -- ** ( ) parens
@@ -570,6 +597,7 @@ nixBinders = mergeBindings =<< (inherit <|> namedVar) `endBy` symbol ';' where
           (exprAfterSymbol '=')
           (pure (toNSourcePos p))
   scope = label "inherit scope" nixParens
+{-# INLINEABLE nixBinders #-}
 
 nixSet :: Parser NExprLoc
 nixSet =
@@ -605,7 +633,7 @@ pathPieces =
   pathPiece =
     (,(False)) <$> antiquoted
       <|> (,(True)) . Plain . one <$> slash
-      <|> (,(False)) . Plain . fromString <$> some (satisfy pathChar)
+      <|> (,(False)) . Plain <$> takeWhile1P (Just "path character") pathChar
 
 nixPath :: Parser NExprLoc
 nixPath =
@@ -652,6 +680,7 @@ nixPath =
       [] -> False
       (Plain t : _) -> not (Text.isSuffixOf "/" t) && t /= "/"
       _ -> True  -- Ends with antiquote, which is OK
+{-# INLINEABLE nixPath #-}
 
 
 -- ** <<x>> environment path
@@ -859,11 +888,7 @@ mapAssocToInfix NAssocRight = InfixR
 -- | Gets all of the arguments for a function.
 argExpr :: Parser (Params NExprLoc)
 argExpr =
-  msum
-    [ atLeft
-    , onlyname
-    , atRight
-    ]
+  (atLeft <|> onlyname <|> atRight)
   <* symbol ':'
  where
   -- An argument not in curly braces. There's some potential ambiguity
@@ -871,10 +896,8 @@ argExpr =
   -- a URI `x:y`? Nix syntax says it's the latter. So we need to fail if
   -- there's a valid URI parse here.
   onlyname =
-    msum
-      [ nixUri *> unexpected (Label $ fromList "valid uri" )
-      , Param <$> identifier
-      ]
+    (nixUri *> unexpected (Label $ fromList "valid uri"))
+    <|> Param <$> identifier
 
   -- Parameters named by an identifier on the left (`args @ {x, y}`)
   atLeft =
@@ -921,6 +944,7 @@ argExpr =
 
             -- Either return this, or attempt to get a comma and restart.
             option (mempty, args) $ symbol ',' *> go args
+{-# INLINEABLE argExpr #-}
 
 nixLambda :: Parser NExprLoc
 nixLambda =
@@ -1004,11 +1028,9 @@ nixSelect term =
         )
     continues <- optional $ lookAhead selectorDot
 
-    maybe
-      id
-      (const nixSelect)
-      continues
-      (pure res)
+    case continues of
+      Nothing -> pure res
+      Just _  -> nixSelect (pure res)
  where
   builder
     :: NExprLoc
@@ -1017,10 +1039,10 @@ nixSelect term =
       , AnnUnit SrcSpan (NAttrPath NExprLoc)
       )
     -> NExprLoc
-  builder t =
-    maybe
-      t
-      (uncurry (`annNSelect` t))
+  builder t = \case
+    Nothing -> t
+    Just pair -> uncurry (`annNSelect` t) pair
+{-# INLINEABLE nixSelect #-}
 
 
 -- ** _ - syntax hole
@@ -1080,17 +1102,18 @@ nixTerm =
       '"'  -> nixString
       '\'' -> nixString
       '^'  -> nixSynHole
-      _ ->
-        msum
-          $  [ nixSelect nixSet | c == 'r' ]
-          <> [ nixPath | pathChar c ]
-          <> if isDigit c
-              then [ nixFloat, nixInt ]
-              else
-                [ nixUri | isAlpha c ]
-                <> [ nixBool | c == 't' || c == 'f' ]
-                <> [ nixNull | c == 'n' ]
-                <> one (nixSelect nixSym)
+      -- Special cases for keywords that could also be identifiers/paths/URIs
+      'r'  -> nixSelect nixSet <|> nixPath <|> nixUri <|> nixSelect nixSym
+      't'  -> nixBool <|> nixPath <|> nixUri <|> nixSelect nixSym
+      'f'  -> nixBool <|> nixPath <|> nixUri <|> nixSelect nixSym
+      'n'  -> nixNull <|> nixPath <|> nixUri <|> nixSelect nixSym
+      _
+        -- For digits and alpha, nixPath must come first because pathChar includes them
+        -- and paths like 4/2 should parse as paths, not as 4 applied to /2
+        | isDigit c -> nixPath <|> nixFloat <|> nixInt <|> nixSelect nixSym
+        | isAlpha c -> nixPath <|> nixUri <|> nixSelect nixSym
+        | otherwise -> nixPath <|> nixSelect nixSym  -- pathChar but not alpha/digit (_, ., -, +, ~)
+{-# INLINEABLE nixTerm #-}
 
 -- | Bundles parsers into @[[]]@ based on precedence (form is required for `megaparsec`).
 nixOperators :: [[ Operator Parser NExprLoc ]]
@@ -1110,6 +1133,7 @@ nixExpr :: Parser NExprLoc
 nixExpr = keywords <|> nixLambda <|> nixExprAlgebra
  where
   keywords = nixLet <|> nixIf <|> nixAssert <|> nixWith
+{-# INLINEABLE nixExpr #-}
 
 
 -- * Parse
