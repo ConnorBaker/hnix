@@ -498,7 +498,6 @@ library
     Nix.Fresh
     Nix.Fresh.Basic
     Nix.Json
-    Nix.Lint
     Nix.List
     Nix.Normal
     Nix.Options
@@ -515,10 +514,6 @@ library
     Nix.String.Coerce
     Nix.Thunk
     Nix.Thunk.Basic
-    Nix.Type.Assumption
-    Nix.Type.Env
-    Nix.Type.Infer
-    Nix.Type.Type
     Nix.Utils.Fix1
     Nix.Value
     Nix.Value.Equal
@@ -568,7 +563,6 @@ library
     , lens-family >= 1.2.2
     , lens-family-core >= 1.2.2
     , lens-family-th >= 0.5.0
-    , logict >= 0.7.0.2
     , megaparsec >= 7.0
     , monad-control >= 1.0.2
     , monadlist >= 0.0.2

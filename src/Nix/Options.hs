@@ -60,7 +60,6 @@ data Options =
     , isXml          :: Bool
     , getAttr        :: Maybe Text
     , getInclude     :: [Path]
-    , isCheck        :: Bool
     , getReadFrom    :: Maybe Path
     , isCache        :: Bool
     , isRepl         :: Bool
@@ -109,7 +108,6 @@ defaultOptions currentTime =
     , isXml          = False
     , getAttr        = mempty
     , getInclude     = mempty
-    , isCheck        = False
     , getReadFrom    = mempty
     , isCache        = False
     , isRepl         = False

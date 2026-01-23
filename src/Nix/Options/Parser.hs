@@ -158,10 +158,6 @@ nixOptions current =
           <> help "Add a path to the Nix expression search path"
           )
         )
-    <*> switch
-        (  long "check"
-        <> help "Whether to check for syntax fails after parsing"
-        )
     <*> optional
         (strOption
           (  long "read"

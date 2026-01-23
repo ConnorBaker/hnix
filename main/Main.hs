@@ -32,9 +32,6 @@ import qualified Data.ByteString.Lazy          as LBS
 import           Nix.Options.Parser             ( nixCommandInfo )
 import           Nix.Standard
 import           Nix.Thunk.Basic
-import           Nix.Type.Env                   ( Env(..) )
-import           Nix.Type.Type                  ( Scheme )
-import qualified Nix.Type.Infer                as TI
 import           Nix.Value.Monad
 import           Options.Applicative     hiding ( ParserResult(..) )
 import           Prettyprinter           hiding ( list )
@@ -238,19 +235,6 @@ main' opts@Options{..} =
 
       (\ expr ->
         do
-          when isCheck $
-            do
-              expr' <- liftIO $ reduceExpr mpath expr
-              either
-                (\ err -> errorWithoutStackTrace $ "Type error: " <> ppShow err)
-                (liftIO . putStrLn . (<>) "Type of expression: " .
-                  ppShow . maybeToMonoid . HM.lookup @VarName @[Scheme] "it" . coerce
-                )
-                $ TI.inferTop mempty $ curry one "it" $ stripAnnotation expr'
-
-                -- liftIO $ putStrLn $ runST $
-                --     runLintM opts . renderSymbolic =<< lint opts expr
-
           catch (processCLIOptions @prov @cfg mpath expr) $
             \case
               NixException frames ->

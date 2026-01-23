@@ -12,7 +12,6 @@ import qualified Data.String                   as String
 import qualified Data.Text                     as Text
 import           Data.Time
 import           GHC.Exts
-import           Nix.Lint
 import           Nix.Options
 import           Nix.Options.Parser
 import           Nix.Parser
@@ -227,18 +226,16 @@ assertParse :: Options -> Path -> Assertion
 assertParse _opts file =
   either
     (\ err -> assertFailure $ "Failed to parse " <> coerce file <> ":\n" <> show err)
-    (const stub)  -- pure $! runST $ void $ lint opts expr
+    (const stub)
     =<< parseNixFileLoc file
 
 assertParseFail :: Options -> Path -> Assertion
-assertParseFail opts file =
+assertParseFail _opts file =
   (`catch` \(_ :: SomeException) -> stub) $
     either
       (const stub)
       (\ expr ->
-        do
-          _ <- pure $! runST $ void $ lint opts expr
-          assertFailure $ "Unexpected success parsing `" <> coerce file <> ":\nParsed value: " <> show expr
+        assertFailure $ "Unexpected success parsing `" <> coerce file <> ":\nParsed value: " <> show expr
       )
       =<< parseNixFileLoc file
 
