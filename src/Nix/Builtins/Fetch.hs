@@ -21,9 +21,6 @@ import qualified Crypto.Hash                   as Hash
 import qualified Nix.Core.AttrSet              as A
 import qualified Data.Text                     as Text
 import qualified Data.Vector                   as V
-import           Nix.Builtins.Internal
-import           Nix.Config.Singleton           ( HasProvCfg )
-import           Nix.Context                    ( CtxCfg )
 import           Nix.Convert
 import           Nix.Core.List                  ( NixList )
 import qualified Nix.Core.List                 as L
@@ -222,7 +219,7 @@ fetchurlNix =
 -- * IO operations
 
 execNix
-  :: forall e t f m . (MonadNix e t f m, HasProvCfg (CtxCfg e)) => NValue t f m -> m (NValue t f m)
+  :: forall e t f m . (MonadNix e t f m) => NValue t f m -> m (NValue t f m)
 execNix xs = do
   -- 2018-11-19: NOTE: Still need to do something with the context here
   -- See prim_exec in nix/src/libexpr/primops.cc

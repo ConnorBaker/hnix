@@ -18,15 +18,14 @@ import           Data.Text                      ( replace
 import qualified Data.Text                     as Text
 import           Prettyprinter           hiding ( list )
 import           Nix.Atoms
-import           Nix.Cited
 import           Nix.Expr.Types
 import           Nix.Expr.Types.Annotated
 import           Nix.Expr.Strings
 import           Nix.Normal
 import           Nix.Parser
 import           Nix.String
-import           Nix.Thunk
 import           Nix.Value
+import           Nix.Thunk                      ( thunkStubText )
 import qualified Nix.Core.List                 as L
 import           Nix.Types.VarName.Static       ( sType, sDrvPath, sOutPath )
 
@@ -272,35 +271,6 @@ prettyAtom = simpleExpr . pretty . atomText
 prettyNix :: NExpr -> Doc ann
 prettyNix = getDoc . foldFix exprFNixDoc
 
-prettyOriginExpr
-  :: forall t f m ann
-   . HasCitations1 m (NValue t f m) f
-  => NExprLocF (Maybe (NValue t f m))
-  -> Doc ann
-prettyOriginExpr = getDoc . go
- where
-  go :: NExprLocF (Maybe (NValue t f m)) -> NixDoc ann
-  go = exprFNixDoc . stripAnnF . fmap render
-   where
-    render :: Maybe (NValue t f m) -> NixDoc ann
-    render Nothing = simpleExpr "_"
-    render (Just (Free (reverse . citations @m -> p:_))) = go (getOriginExpr p)
-    render _       = simpleExpr "?"
-      -- render (Just (NValue (citations -> ps))) =
-          -- simpleExpr $ foldr ((\x y -> vsep [x, y]) . parens . indent 2 . getDoc
-          --                           . go . originExpr)
-          --     mempty (reverse ps)
-
--- | Takes original expression from inside provenance information.
--- Prettifies that expression.
-prettyExtractFromProvenance
-  :: forall t f m ann
-   . HasCitations1 m (NValue t f m) f
-  => [Provenance m (NValue t f m)] -> Doc ann
-prettyExtractFromProvenance =
-  sep .
-    fmap (prettyOriginExpr . getOriginExpr)
-
 exprFNixDoc :: forall ann . NExprF (NixDoc ann) -> NixDoc ann
 exprFNixDoc = \case
   NConstant atom -> prettyAtom atom
@@ -478,59 +448,6 @@ derivationDoc =
       in if t == thunkStubText then Nothing else Just t
     NVPath p -> Just $ toText p
     _ -> Nothing
-
--- | During the output, which can print only representation of value,
--- lazy thunks need to looked into & so - be evaluated (*sic)
--- This type is a simple manual witness "is the thunk gets shown".
-data ValueOrigin = WasThunk | Value
- deriving Eq
-
-prettyProv
-  :: forall t f m ann
-   . ( HasCitations m (NValue t f m) t
-     , HasCitations1 m (NValue t f m) f
-     , MonadThunk t m (NValue t f m)
-     , MonadDataContext f m
-     )
-  => ValueOrigin  -- ^ Was thunk?
-  -> NValue t f m
-  -> Doc ann
-prettyProv wasThunk v =
-  handlePresence
-    id
-    (\ ps pv ->
-      fillSep
-        [ pv
-        , indent 2 $
-          "(" <> ("thunk " `whenTrue` (wasThunk == WasThunk) <> "from: " <> prettyExtractFromProvenance ps) <> ")"
-        ]
-    )
-    (citations @m @(NValue t f m) v)
-    (prettyNValue v)
-
-prettyNValueProv
-  :: forall t f m ann
-   . ( HasCitations m (NValue t f m) t
-     , HasCitations1 m (NValue t f m) f
-     , MonadThunk t m (NValue t f m)
-     , MonadDataContext f m
-     )
-  => NValue t f m
-  -> Doc ann
-prettyNValueProv =
-  prettyProv Value
-
-prettyNThunk
-  :: forall t f m ann
-   . ( HasCitations m (NValue t f m) t
-     , HasCitations1 m (NValue t f m) f
-     , MonadThunk t m (NValue t f m)
-     , MonadDataContext f m
-     )
-  => t
-  -> m (Doc ann)
-prettyNThunk t =
-  prettyProv WasThunk <$> dethunk t
 
 -- | This function is used only by the testing code.
 printNix :: forall t f m . MonadDataContext f m => NValue t f m -> Text

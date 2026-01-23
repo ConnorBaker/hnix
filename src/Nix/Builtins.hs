@@ -39,8 +39,6 @@ import           Nix.Effects.Basic              ( fetchTarball
                                                 , fetchTree
                                                 )
 import           Nix.Exec
-import           Nix.Config.Singleton           ( HasProvCfg )
-import           Nix.Context                    ( CtxCfg )
 import           Nix.Expr.Types
 import qualified Nix.Eval                      as Eval
 import           Nix.Frames
@@ -60,7 +58,7 @@ import           Nix.Value.Monad
 -- ** Builtin functions
 
 derivationNix
-  :: forall e t f m. (MonadNix e t f m, Scoped (NValue t f m) m, HasProvCfg (CtxCfg e))
+  :: forall e t f m. (MonadNix e t f m, Scoped (NValue t f m) m)
   => m (NValue t f m)
 derivationNix = foldFix Eval.eval $$(do
     -- This is compiled in so that we only parse it once at compile-time.
@@ -122,7 +120,7 @@ builtinsBuiltinNix = throwError $ ErrorCall "HNix does not provide builtins.buil
 -- Builtins.hs wires it up with withNixContext.
 scopedImportNix
   :: forall e t f m
-   . (MonadNix e t f m, HasProvCfg (CtxCfg e))
+   . (MonadNix e t f m)
   => NValue t f m
   -> NValue t f m
   -> m (NValue t f m)
@@ -130,7 +128,7 @@ scopedImportNix = scopedImportNixWith withNixContext
 
 -- | Wrapper for importNix that supplies withNixContext.
 importNix
-  :: forall e t f m . (MonadNix e t f m, HasProvCfg (CtxCfg e)) => NValue t f m -> m (NValue t f m)
+  :: forall e t f m . (MonadNix e t f m) => NValue t f m -> m (NValue t f m)
 importNix = importNixWith withNixContext
 
 currentSystemNix :: MonadNix e t f m => m (NValue t f m)
@@ -161,7 +159,7 @@ langVersionNix = toValue (5 :: Int)
 
 -- ** @builtinsList@
 
-builtinsList :: forall e t f m . (MonadNix e t f m, HasProvCfg (CtxCfg e)) => m [Builtin (NValue t f m)]
+builtinsList :: forall e t f m . (MonadNix e t f m) => m [Builtin (NValue t f m)]
 builtinsList =
   sequenceA
     [ add  TopLevel "abort"            throwNix -- for now
@@ -365,7 +363,7 @@ builtinsList =
 -- | Evaluate expression in the default context.
 withNixContext
   :: forall e t f m r
-   . (MonadNix e t f m, Has e Options, HasProvCfg (CtxCfg e))
+   . (MonadNix e t f m, Has e Options)
   => Maybe Path
   -> m r
   -> m r
@@ -389,7 +387,6 @@ builtins
   :: forall e t f m
   . ( MonadNix e t f m
      , Scoped (NValue t f m) m
-     , HasProvCfg (CtxCfg e)
      )
   => m (Scopes m (NValue t f m))
 builtins =

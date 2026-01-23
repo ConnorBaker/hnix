@@ -37,7 +37,7 @@ import qualified Data.Text.Read                as Text
 import           Nix.Builtins
 import           Nix.Cache
 import           Nix.Config.Singleton
-import           Nix.Context                    ( CtxCfg, HasEvalCfg )
+import           Nix.Context                    ( HasEvalCfg )
 import qualified Nix.Eval                      as Eval
 import           Nix.Exec
 import           Nix.Expr.Types
@@ -60,7 +60,7 @@ import           Nix.XML
 --   type. It sets up the common Nix environment and applies the
 --   transformations, allowing them to be easily composed.
 nixEval
-  :: (MonadNix e t f m, Has e Options, HasProvCfg (CtxCfg e), Functor g)
+  :: (MonadNix e t f m, Has e Options, Functor g)
   => Transform g (m a)
   -> Alg g (m a)
   -> Maybe Path
@@ -70,7 +70,7 @@ nixEval transform alg mpath = withNixContext mpath . adi transform alg
 
 -- | Evaluate a nix expression in the default context
 nixEvalExpr
-  :: (MonadNix e t f m, Has e Options, HasProvCfg (CtxCfg e))
+  :: (MonadNix e t f m, Has e Options)
   => Maybe Path
   -> NExpr
   -> m (NValue t f m)
@@ -79,7 +79,7 @@ nixEvalExpr = nixEval id Eval.eval
 -- | Evaluate a nix expression in the default context
 nixEvalExprLoc
   :: forall e t f m
-   . (MonadNix e t f m, Has e Options, MonadIO m, HasProvCfg (CtxCfg e))
+   . (MonadNix e t f m, Has e Options, MonadIO m)
   => Maybe Path
   -> NExprLoc
   -> m (NValue t f m)
@@ -105,14 +105,14 @@ nixEvalExprLocT mpath = withNixContext mpath . evalExprLocT
 --   'MonadNix'). All this function does is provide the right type class
 --   context.
 nixTracingEvalExprLoc
-  :: (MonadNix e t f m, Has e Options, MonadIO m, Alternative m, HasProvCfg (CtxCfg e))
+  :: (MonadNix e t f m, Has e Options, MonadIO m, Alternative m)
   => Maybe Path
   -> NExprLoc
   -> m (NValue t f m)
 nixTracingEvalExprLoc mpath = withNixContext mpath . evalExprLoc
 
 evaluateExpression
-  :: (MonadNix e t f m, Has e Options, HasProvCfg (CtxCfg e))
+  :: (MonadNix e t f m, Has e Options)
   => Maybe Path
   -> (Maybe Path -> NExprLoc -> m (NValue t f m))
   -> (NValue t f m -> m a)

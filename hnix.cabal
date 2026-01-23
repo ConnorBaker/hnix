@@ -683,23 +683,10 @@ test-suite hnix-inspection
   type: exitcode-stdio-1.0
   main-is: Main.hs
   other-modules:
-    Inspection.AttrSet
-    Inspection.Cited
-    Inspection.Coerce
-    Inspection.Comonad
     Inspection.Config
-    Inspection.Convert
-    Inspection.Functor
-    Inspection.HasCitations
-    Inspection.Integration
-    Inspection.MonadThunk
     Inspection.NixString
-    Inspection.Protocol
     Inspection.Scope
     Inspection.Singleton
-    Inspection.Thunk
-    Inspection.Types
-    Inspection.Value
   hs-source-dirs:
     tests/inspection
   build-depends:

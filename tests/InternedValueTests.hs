@@ -35,16 +35,16 @@ import           Test.Tasty.HUnit
 
 
 -- | Type aliases for the standard evaluation monad (no stats, default config).
-type StandardIO = StdM 'False DefaultCfg IO
-type StdVal = ValueF 'False StandardIO
-type StdThun = ThunkF 'False StandardIO
+type StandardIO = StdM DefaultCfg IO
+type StdVal = ValueF StandardIO
+type StdThun = ThunkF StandardIO
 
 
 -- | Run an evaluation action and return the result.
 --
 -- The action receives the 'GivenStdInterned' constraint from 'runWithBasicEffects'
 -- via 'give', enabling zero-overhead access to interned values.
-runEval :: (GivenStdInterned 'False DefaultCfg IO => StandardIO a) -> IO a
+runEval :: (GivenStdInterned DefaultCfg IO => StandardIO a) -> IO a
 runEval action = do
   time <- getCurrentTime
   let opts = defaultOptions time
@@ -58,7 +58,7 @@ runEval action = do
 -- 'demand' only forces the outermost thunk without reconstruction.
 --
 -- Requires 'GivenStdInterned' constraint, which is satisfied by 'runEval'.
-evalExpr :: GivenStdInterned 'False DefaultCfg IO => Text -> StandardIO StdVal
+evalExpr :: GivenStdInterned DefaultCfg IO => Text -> StandardIO StdVal
 evalExpr src =
   case parseNixText src of
     Left err -> errorWithoutStackTrace $ "Parse error: " <> show err
@@ -78,7 +78,7 @@ evalExpr src =
 -- by 'runEval'.
 assertPointerEqual
   :: Text                         -- ^ Nix expression to evaluate
-  -> (GivenStdInterned 'False DefaultCfg IO => StandardIO StdVal)  -- ^ Getter for interned value
+  -> (GivenStdInterned DefaultCfg IO => StandardIO StdVal)  -- ^ Getter for interned value
   -> Text                         -- ^ Description for error message
   -> IO ()
 assertPointerEqual expr getInterned desc = do
@@ -98,7 +98,7 @@ assertPointerEqual expr getInterned desc = do
 -- to an interned value (sanity check).
 assertPointerNotEqual
   :: Text
-  -> (GivenStdInterned 'False DefaultCfg IO => StandardIO StdVal)
+  -> (GivenStdInterned DefaultCfg IO => StandardIO StdVal)
   -> Text
   -> IO ()
 assertPointerNotEqual expr getInterned desc = do

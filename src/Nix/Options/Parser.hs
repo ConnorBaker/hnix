@@ -89,10 +89,6 @@ nixOptions current =
         <> help "Enable reporting of thunk tracing as well as regular evaluation"
         )
     <*> switch
-        (  long "values"
-        <> help "Enable reporting of value provenance in error messages"
-        )
-    <*> switch
         (  long "scopes"
         <> help "Enable reporting of scopes in evaluation traces"
         )

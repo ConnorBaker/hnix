@@ -213,10 +213,7 @@ renderValue
   -> NValue t f m
   -> m (Doc ann)
 renderValue _level _longLabel _shortLabel v =
-  do
-    opts <- askOptions
-    let render = if isValues opts then prettyNValueProv else prettyNValue
-    render <$> removeEffects v
+  prettyNValue <$> removeEffects v
 
 dumbRenderValue
   :: forall e t f m ann

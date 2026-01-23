@@ -63,7 +63,7 @@ import qualified System.IO                     as IO
 import qualified System.Nix.StorePath          as Store
 
 -- | Type alias for the interned values in the standard monad.
-type StdInterned (prov :: Bool) m = InternedValues (ThunkF prov m) (CitedF prov m) m
+type StdInterned m = InternedValues (ThunkF m) (CitedF m) m
 
 -- | Constraint alias for functions that access interned values in the standard monad.
 --
@@ -71,90 +71,61 @@ type StdInterned (prov :: Bool) m = InternedValues (ThunkF prov m) (CitedF prov 
 -- Use this in type signatures for standard evaluation code:
 --
 -- @
--- myEval :: (StdBase m, GivenStdInterned prov cfg m) => NExprLoc -> StdM prov cfg m (StdValM prov cfg m)
+-- myEval :: (StdBase m, GivenStdInterned cfg m) => NExprLoc -> StdM cfg m (StdValM cfg m)
 -- @
-type GivenStdInterned (prov :: Bool) (cfg :: EvalCfg) m =
-  GivenInterned (ThunkF prov (StdM prov cfg m)) (CitedF prov (StdM prov cfg m)) (StdM prov cfg m)
+type GivenStdInterned (cfg :: EvalCfg) m =
+  GivenInterned (ThunkF (StdM cfg m)) (CitedF (StdM cfg m)) (StdM cfg m)
 
 
--- * Provenance-indexed types
+-- * Value types without provenance
 --
--- The core types are parameterized by a @prov :: Bool@ type parameter that
--- controls provenance tracking. When @prov ~ 'True@, full provenance is tracked.
--- When @prov ~ 'False@, provenance tracking is eliminated with zero overhead.
+-- With provenance removed, the types are simplified:
+-- - CitedF is just Identity (zero overhead wrapper)
+-- - ThunkF wraps NThunkF directly
+-- - ValueF uses these simplified types
+
+-- | Cited functor - now just Identity (zero overhead).
 --
--- The unified @Cited prov t f m a@ type from "Nix.Cited.Basic" provides the
--- foundation. We build @CitedF@, @ThunkF@, and @ValueF@ on top of it.
+-- Previously parameterized by @prov :: Bool@ for optional provenance tracking.
+-- With provenance removed, this is always Identity.
+newtype CitedF m a =
+  CitedF (Identity a)
+  deriving (Functor, Applicative, Foldable, Traversable)
 
--- | Cited functor parameterized by provenance.
---
--- When @prov ~ 'True@: wraps @NCited@ (stores provenance list)
--- When @prov ~ 'False@: wraps @Identity@ (zero overhead)
-newtype CitedF (prov :: Bool) m a =
-  CitedF
-    (Cited prov (ThunkF prov m) (CitedF prov m) m a)
-
-instance SBoolI prov => Functor (CitedF prov m) where
-  fmap f (CitedF c) = CitedF (fmap f c)
-  {-# INLINE fmap #-}
-
-instance SBoolI prov => Applicative (CitedF prov m) where
-  pure = CitedF . pure
-  {-# INLINE pure #-}
-  CitedF f <*> CitedF a = CitedF (f <*> a)
-  {-# INLINE (<*>) #-}
-
-instance SBoolI prov => Foldable (CitedF prov m) where
-  foldMap f (CitedF c) = foldMap f c
-  {-# INLINE foldMap #-}
-
-instance SBoolI prov => Traversable (CitedF prov m) where
-  traverse f (CitedF c) = CitedF <$> traverse f c
-  {-# INLINE traverse #-}
-
-instance SBoolI prov => Comonad (CitedF prov m) where
-  extract (CitedF c) = extract c
+instance Comonad (CitedF m) where
+  extract (CitedF (Identity a)) = a
   {-# INLINE extract #-}
-  duplicate (CitedF c) = CitedF (CitedF <$> duplicate c)
+  duplicate c = CitedF (Identity c)
   {-# INLINE duplicate #-}
 
-instance SBoolI prov => ComonadEnv [Provenance m (ValueF prov m)] (CitedF prov m) where
-  ask (CitedF c) = coerce (ask c)
+instance ComonadEnv [()] (CitedF m) where
+  ask _ = []  -- No provenance
   {-# INLINE ask #-}
 
--- | Thunk type parameterized by provenance.
-newtype ThunkF (prov :: Bool) m =
-  ThunkF
-    (CitedF prov m (NThunkF m (ValueF prov m)))
+-- | Thunk type without provenance.
+newtype ThunkF m =
+  ThunkF (CitedF m (NThunkF m (ValueF m)))
 
--- | Value type parameterized by provenance.
-type ValueF (prov :: Bool) m = NValue (ThunkF prov m) (CitedF prov m) m
+-- | Value type without provenance.
+type ValueF m = NValue (ThunkF m) (CitedF m) m
 
--- | Value' type parameterized by provenance.
-type ValueF' (prov :: Bool) m = NValue' (ThunkF prov m) (CitedF prov m) m (ValueF prov m)
+-- | Value' type without provenance.
+type ValueF' m = NValue' (ThunkF m) (CitedF m) m (ValueF m)
 
--- | Standard evaluation monad with compile-time configuration and provenance.
+-- | Standard evaluation monad with compile-time configuration.
 --
--- The @prov@ parameter controls provenance tracking at the type level.
--- The @cfg@ parameter enables zero-cost conditional execution for other features.
--- Use 'withEvalCfg' at program startup to bridge runtime options to @cfg@ and @prov@.
-type StdM (prov :: Bool) (cfg :: EvalCfg) m = StandardT prov cfg (StdIdT m)
+-- The @cfg@ parameter enables zero-cost conditional execution for stats and tracing.
+-- Use 'withEvalCfg' at program startup to bridge runtime options to @cfg@.
+type StdM (cfg :: EvalCfg) m = StandardT cfg (StdIdT m)
 
 -- | Thunk type in the standard monad.
---
--- Now uses provenance-indexed @ThunkF prov@ type.
-type StdThunM (prov :: Bool) (cfg :: EvalCfg) m = ThunkF prov (StdM prov cfg m)
+type StdThunM (cfg :: EvalCfg) m = ThunkF (StdM cfg m)
 
 -- | Cited type in the standard monad.
---
--- Now uses provenance-indexed @CitedF prov@ type.
-type StdCitedM (prov :: Bool) (cfg :: EvalCfg) m = CitedF prov (StdM prov cfg m)
+type StdCitedM (cfg :: EvalCfg) m = CitedF (StdM cfg m)
 
 -- | Value type in the standard monad.
---
--- Now uses provenance-indexed @ValueF prov@ type. The @prov@ parameter is explicit,
--- eliminating the need for type family reduction with existential @cfg@.
-type StdValM (prov :: Bool) (cfg :: EvalCfg) m = ValueF prov (StdM prov cfg m)
+type StdValM (cfg :: EvalCfg) m = ValueF (StdM cfg m)
 
 type StdBase m =
   ( MonadFix m
@@ -176,89 +147,73 @@ type StdBase m =
   , Typeable m
   )
 
--- | Type alias for the inner Cited type (used for coercion).
---
--- > Cited prov (ThunkF prov m) (CitedF prov m) m (NThunkF m (ValueF prov m))
-type InnerCitedThunk (prov :: Bool) m =
-  Cited prov (ThunkF prov m) (CitedF prov m) m (NThunkF m (ValueF prov m))
-
 -- | Type alias for the inner thunk type (the payload inside CitedF).
-type InnerThunk (prov :: Bool) m = NThunkF m (ValueF prov m)
+type InnerThunk m = NThunkF m (ValueF m)
 
--- | Show instance for ThunkF (provenance-indexed).
-instance Show (ThunkF prov m) where
+-- | Show instance for ThunkF.
+instance Show (ThunkF m) where
   show _ = toString thunkStubText
 
--- | HasCitations1 instance for CitedF (provenance-indexed).
---
--- Dispatches based on the @prov@ singleton:
--- - When @prov ~ 'True@: delegates to underlying NCited
--- - When @prov ~ 'False@: no-op (empty citations, identity addProvenance)
-instance SBoolI prov => HasCitations1 m (ValueF prov m) (CitedF prov m) where
-  citations1 (CitedF c) = citations1 c
+-- | HasCitations1 instance for CitedF.
+-- With provenance removed, this is a no-op.
+instance HasCitations1 m (ValueF m) (CitedF m) where
+  citations1 _ = []
   {-# INLINE citations1 #-}
-  addProvenance1 x (CitedF c) = CitedF $ addProvenance1 x c
+  addProvenance1 _ = id
   {-# INLINE addProvenance1 #-}
 
--- | HasCitations instance for ThunkF (provenance-indexed).
-instance SBoolI prov => HasCitations m (ValueF prov m) (ThunkF prov m) where
-  citations (ThunkF c) = citations1 c
+-- | HasCitations instance for ThunkF.
+-- With provenance removed, this is a no-op.
+instance HasCitations m (ValueF m) (ThunkF m) where
+  citations _ = []
   {-# INLINE citations #-}
-  addProvenance x (ThunkF c) = ThunkF $ addProvenance1 x c
+  addProvenance _ = id
   {-# INLINE addProvenance #-}
 
--- | Unified MonadThunk instance for ThunkF (any @prov@).
---
--- Uses the unified @MonadThunk (Cited prov ...)@ instance from Cited.Basic.
--- Includes optional stats tracking when enabled (via 'askEvalStats').
---
--- This unified instance allows polymorphic code to use @MonadThunk (ThunkF prov ...)@
--- without knowing the concrete value of @prov@ at compile time.
+-- | MonadThunk instance for ThunkF.
+-- Simplified without provenance tracking.
 instance
   ( Typeable       m
-  , Typeable       prov
   , MonadThunkId   m
   , MonadAtomicRef m
   , MonadCatch     m
   , MonadIO        m
-  , SBoolI prov
-  , MonadReader (Context cfg m (ValueF prov m) (StdInterned prov m)) m
+  , MonadReader (Context cfg m (ValueF m) (StdInterned m)) m
   )
-  => MonadThunk (ThunkF prov m) m (ValueF prov m) where
+  => MonadThunk (ThunkF m) m (ValueF m) where
 
   thunkId
-    :: ThunkF prov m
+    :: ThunkF m
     -> ThunkId  m
-  thunkId = thunkId @(InnerCitedThunk prov m) . coerce
+  thunkId (ThunkF (CitedF (Identity t))) = thunkId @(NThunkF m (ValueF m)) @m t
   {-# INLINABLE thunkId #-}
 
   thunk
-    :: m (ValueF prov m)
-    -> m (ThunkF prov m)
+    :: m (ValueF m)
+    -> m (ThunkF m)
   thunk action = do
     mstats <- askEvalStats
     traverse_ recordThunkCreate mstats
-    coerce <$> thunk @(InnerCitedThunk prov m) action
+    ThunkF . CitedF . Identity <$> thunk @(NThunkF m (ValueF m)) action
   {-# INLINABLE thunk #-}
 
   query
-    :: m (ValueF prov m)
-    ->    ThunkF prov m
-    -> m (ValueF prov m)
-  query b = query @(InnerCitedThunk prov m) b . coerce
+    :: m (ValueF m)
+    ->    ThunkF m
+    -> m (ValueF m)
+  query b (ThunkF (CitedF (Identity t))) = query @(NThunkF m (ValueF m)) @m b t
   {-# INLINABLE query #-}
 
   force
-    ::    ThunkF prov m
-    -> m (ValueF prov m)
-  force t = do
+    ::    ThunkF m
+    -> m (ValueF m)
+  force (ThunkF (CitedF (Identity t))) = do
     mstats <- askEvalStats
     case mstats of
-      Nothing -> force @(InnerCitedThunk prov m) (coerce t)
+      Nothing -> handleDisplayProvenance $ force @(NThunkF m (ValueF m)) @m t
       Just stats -> do
         -- Only check computed state when profiling (for accurate stats)
-        let innerThunk = extractCited (coerce t :: InnerCitedThunk prov m)
-        wasComputed <- isComputed innerThunk
+        wasComputed <- isComputed t
 
         -- Save parent's accumulated child thunk time and reset for our children
         parentThunkChildTime <- liftIO $ readIORef (statsThunkChildTime stats)
@@ -268,7 +223,7 @@ instance
         ioTimeBefore <- liftIO $ readIORef (statsIOTime stats)
 
         start <- liftIO Clock.getMonotonicTimeNSec
-        result <- force @(InnerCitedThunk prov m) (coerce t)
+        result <- handleDisplayProvenance $ force @(NThunkF m (ValueF m)) @m t
         end <- liftIO Clock.getMonotonicTimeNSec
 
         -- Get IO time after forcing
@@ -294,47 +249,45 @@ instance
   {-# INLINABLE force #-}
 
   forceEff
-    ::    ThunkF prov m
-    -> m (ValueF prov m)
-  forceEff = forceEff @(InnerCitedThunk prov m) . coerce
+    ::    ThunkF m
+    -> m (ValueF m)
+  forceEff (ThunkF (CitedF (Identity t))) = handleDisplayProvenance $ forceEff @(NThunkF m (ValueF m)) @m t
   {-# INLINABLE forceEff #-}
 
   further
-    ::    ThunkF prov m
-    -> m (ThunkF prov m)
-  further = fmap coerce . further @(InnerCitedThunk prov m) . coerce
+    ::    ThunkF m
+    -> m (ThunkF m)
+  further (ThunkF (CitedF (Identity t))) = ThunkF . CitedF . Identity <$> further @(NThunkF m (ValueF m)) @m t
   {-# INLINABLE further #-}
 
--- | Scoped instance for provenance-indexed value types.
+-- | Scoped instance for value types.
 --
 -- Uses instrumented lookupVar that can record scope stats when enabled.
 instance
-  ( MonadReader (Context cfg m (ValueF prov m) (StdInterned prov m)) m
+  ( MonadReader (Context cfg m (ValueF m) (StdInterned m)) m
   , MonadIO m
-  , SBoolI prov
   )
-  => Scoped (ValueF prov m) m where
+  => Scoped (ValueF m) m where
   askScopes   = askScopesReader
-  clearScopes = clearScopesReader @m @(ValueF prov m)
+  clearScopes = clearScopesReader @m @(ValueF m)
   pushScopes  = pushScopesReader
   setScopes   = setScopesReader
   lookupVar   = lookupVarWithStatsF
 
 -- | Instrumented lookupVar for ValueF that records scope stats when enabled.
 lookupVarWithStatsF
-  :: forall prov cfg m
-  . ( MonadReader (Context cfg m (ValueF prov m) (StdInterned prov m)) m
+  :: forall cfg m
+  . ( MonadReader (Context cfg m (ValueF m) (StdInterned m)) m
     , MonadIO m
-    , SBoolI prov
     )
   => VarName
-  -> m (Maybe (ValueF prov m))
+  -> m (Maybe (ValueF m))
 lookupVarWithStatsF k = do
   mstats <- askEvalStats
   case mstats of
     Nothing -> lookupVarReader k
     Just stats -> do
-      (result, info, elapsed) <- lookupVarReaderWithInfo @m @(ValueF prov m) k
+      (result, info, elapsed) <- lookupVarReaderWithInfo @m @(ValueF m) k
       let scopeResult = case info of
             LexicalHit depth searched -> ScopeLexicalHit depth searched
             DynamicHit depth searched -> ScopeDynamicHit depth searched
@@ -343,9 +296,7 @@ lookupVarWithStatsF k = do
       pure result
 
 
--- | MonadEffects instance for provenance-indexed thunk/cited types.
---
--- Uses the provenance-indexed @ThunkF prov@ and @CitedF prov@ types.
+-- | MonadEffects instance for thunk/cited types.
 instance
   ( MonadFix m
   , MonadFile m
@@ -362,17 +313,15 @@ instance
   , MonadStoreRead m
   , MonadAtomicRef m
   , Typeable m
-  , SBoolI prov
-  , Scoped (ValueF prov m) m
-  , MonadReader (Context cfg m (ValueF prov m) (StdInterned prov m)) m
+  , Scoped (ValueF m) m
+  , MonadReader (Context cfg m (ValueF m) (StdInterned m)) m
   , MonadState (HashMap Path NExprLoc, HashMap Text Text) m
-  , MonadDataErrorContext (ThunkF prov m) (CitedF prov m) m
-  , MonadThunk (ThunkF prov m) m (ValueF prov m)
-  , MonadValue (ValueF prov m) m
-  , HasProvCfg cfg
-  , GivenInterned (ThunkF prov m) (CitedF prov m) m  -- For interned value access
+  , MonadDataErrorContext (ThunkF m) (CitedF m) m
+  , MonadThunk (ThunkF m) m (ValueF m)
+  , MonadValue (ValueF m) m
+  , GivenInterned (ThunkF m) (CitedF m) m  -- For interned value access
   )
-  => MonadEffects (ThunkF prov m) (CitedF prov m) m where
+  => MonadEffects (ThunkF m) (CitedF m) m where
   toAbsolutePath   = defaultToAbsolutePath
   findEnvPath      = defaultFindEnvPath
   findPath         = defaultFindPath
@@ -381,71 +330,58 @@ instance
   derivationStrict = defaultDerivationStrict
   traceEffect      = defaultTraceEffect
 
--- * @instance MonadValue (ValueF prov m) m@
---
--- Unified instance for provenance-indexed values. Uses the constraints needed
--- for both prov ~ 'True and prov ~ 'False cases.
+-- * @instance MonadValue (ValueF m) m@
 instance
   ( MonadAtomicRef m
   , MonadCatch m
   , MonadIO m
   , Typeable m
-  , Typeable prov
-  , SBoolI prov
-  , MonadReader (Context cfg m (ValueF prov m) (StdInterned prov m)) m
+  , MonadReader (Context cfg m (ValueF m) (StdInterned m)) m
   , MonadThunkId m
-  , MonadThunk (ThunkF prov m) m (ValueF prov m)
+  , MonadThunk (ThunkF m) m (ValueF m)
   )
-  => MonadValue (ValueF prov m) m where
+  => MonadValue (ValueF m) m where
 
   defer
-    :: m (ValueF prov m)
-    -> m (ValueF prov m)
-  defer action = pure . coerce <$> thunk @(ThunkF prov m) action
+    :: m (ValueF m)
+    -> m (ValueF m)
+  defer action = pure . coerce <$> thunk @(ThunkF m) action
   {-# INLINABLE defer #-}
 
   demand
-    :: ValueF prov m
-    -> m (ValueF prov m)
+    :: ValueF m
+    -> m (ValueF m)
   demand = go
    where
-    go :: ValueF prov m -> m (ValueF prov m)
+    go :: ValueF m -> m (ValueF m)
     go =
       free
-        (go <=< force @(ThunkF prov m) . coerce)
+        (go <=< force @(ThunkF m) . coerce)
         (pure . Free)
   {-# INLINABLE demand #-}
 
   inform
-    :: ValueF prov m
-    -> m (ValueF prov m)
+    :: ValueF m
+    -> m (ValueF m)
   inform = go
    where
-    go :: ValueF prov m -> m (ValueF prov m)
+    go :: ValueF m -> m (ValueF m)
     go =
       free
-        ((pure . coerce <$>) . (further @(InnerCitedThunk prov m) . coerce))
+        ((pure . coerce <$>) . (further @(ThunkF m) . coerce))
         ((Free <$>) . bindNValue' id go)
   {-# INLINABLE inform #-}
 
 
--- | The core evaluation transformer, parameterized by provenance and config.
+-- | The core evaluation transformer, parameterized by config.
 --
--- The @prov@ parameter controls provenance tracking at the type level:
--- - When @prov ~ 'True@: full provenance tracking with NCited
--- - When @prov ~ 'False@: zero-overhead provenance elimination with Identity
---
--- The @cfg@ parameter enables zero-cost conditional execution for other features
+-- The @cfg@ parameter enables zero-cost conditional execution for features
 -- (stats, tracing). When these are known at compile time (via 'withEvalCfg'),
 -- GHC eliminates unused branches.
---
--- By making @prov@ an explicit type parameter (rather than extracting it from
--- @cfg@ via type families), we avoid GHC's inability to reduce type families
--- under existential quantification.
-newtype StandardTF (prov :: Bool) (cfg :: EvalCfg) r m a
+newtype StandardTF (cfg :: EvalCfg) r m a
   = StandardTF
       (ReaderT
-        (Context cfg r (ValueF prov r) (StdInterned prov r))
+        (Context cfg r (ValueF r) (StdInterned r))
         (StateT (HashMap Path NExprLoc, HashMap Text Text) m)
         a
       )
@@ -462,69 +398,69 @@ newtype StandardTF (prov :: Bool) (cfg :: EvalCfg) r m a
     , MonadThrow
     , MonadMask
     , MonadState (HashMap Path NExprLoc, HashMap Text Text)
-    , MonadReader (Context cfg r (ValueF prov r) (StdInterned prov r))
+    , MonadReader (Context cfg r (ValueF r) (StdInterned r))
     )
 
-instance MonadTrans (StandardTF prov cfg r) where
+instance MonadTrans (StandardTF cfg r) where
   lift = StandardTF . lift . lift
   {-# INLINABLE lift #-}
 
 instance (MonadPutStr r, MonadPutStr m)
-  => MonadPutStr (StandardTF prov cfg r m)
+  => MonadPutStr (StandardTF cfg r m)
 instance (MonadHttp r, MonadHttp m)
-  => MonadHttp (StandardTF prov cfg r m)
+  => MonadHttp (StandardTF cfg r m)
 instance (MonadEnv r, MonadEnv m)
-  => MonadEnv (StandardTF prov cfg r m)
+  => MonadEnv (StandardTF cfg r m)
 instance (MonadPaths r, MonadPaths m)
-  => MonadPaths (StandardTF prov cfg r m)
+  => MonadPaths (StandardTF cfg r m)
 instance (MonadInstantiate r, MonadInstantiate m)
-  => MonadInstantiate (StandardTF prov cfg r m)
+  => MonadInstantiate (StandardTF cfg r m)
 instance (MonadExec r, MonadExec m)
-  => MonadExec (StandardTF prov cfg r m)
+  => MonadExec (StandardTF cfg r m)
 instance (MonadIntrospect r, MonadIntrospect m)
-  => MonadIntrospect (StandardTF prov cfg r m)
+  => MonadIntrospect (StandardTF cfg r m)
 
 ---------------------------------------------------------------------------------
 
--- | Standard evaluation monad, parameterized by provenance and config.
+-- | Standard evaluation monad, parameterized by config.
 --
--- When @prov@ and @cfg@ are known at compile time, GHC eliminates unused branches
--- for disabled features (provenance, stats, tracing).
-type StandardT (prov :: Bool) (cfg :: EvalCfg) m = Fix1T (StandardTF prov cfg) m
+-- When @cfg@ is known at compile time, GHC eliminates unused branches
+-- for disabled features (stats, tracing).
+type StandardT (cfg :: EvalCfg) m = Fix1T (StandardTF cfg) m
 
-instance MonadTrans (Fix1T (StandardTF prov cfg)) where
+instance MonadTrans (Fix1T (StandardTF cfg)) where
   lift = Fix1T . lift
   {-# INLINABLE lift #-}
 
 instance MonadThunkId m
-  => MonadThunkId (StandardT prov cfg m) where
+  => MonadThunkId (StandardT cfg m) where
 
-  type ThunkId (StandardT prov cfg m) = ThunkId m
+  type ThunkId (StandardT cfg m) = ThunkId m
 
 mkStandardT
   :: ReaderT
-      (Context cfg (StandardT prov cfg m) (ValueF prov (StandardT prov cfg m)) (StdInterned prov (StandardT prov cfg m)))
+      (Context cfg (StandardT cfg m) (ValueF (StandardT cfg m)) (StdInterned (StandardT cfg m)))
       (StateT (HashMap Path NExprLoc, HashMap Text Text) m)
       a
-  -> StandardT prov cfg m a
+  -> StandardT cfg m a
 mkStandardT = coerce
 {-# INLINABLE mkStandardT #-}
 
 runStandardT
-  :: StandardT prov cfg m a
+  :: StandardT cfg m a
   -> ReaderT
-      (Context cfg (StandardT prov cfg m) (ValueF prov (StandardT prov cfg m)) (StdInterned prov (StandardT prov cfg m)))
+      (Context cfg (StandardT cfg m) (ValueF (StandardT cfg m)) (StdInterned (StandardT cfg m)))
       (StateT (HashMap Path NExprLoc, HashMap Text Text) m)
       a
 runStandardT = coerce
 {-# INLINABLE runStandardT #-}
 
 runWithBasicEffectsAndStats
-  :: forall m prov cfg a
-   . (MonadIO m, MonadAtomicRef m, SBoolI prov)
+  :: forall m cfg a
+   . (MonadIO m, MonadAtomicRef m)
   => Options
   -> Maybe EvalStats
-  -> (GivenStdInterned prov cfg m => StandardT prov cfg (StdIdT m) a)
+  -> (GivenStdInterned cfg m => StandardT cfg (StdIdT m) a)
   -> m a
 runWithBasicEffectsAndStats opts mstats action =
   -- Use 'give' to provide interned values via the Given constraint.
@@ -533,25 +469,23 @@ runWithBasicEffectsAndStats opts mstats action =
   give interned $
     fun $ (`evalStateT` mempty) $ (`runReaderT` newContextWithInterned opts mstats interned) $ runStandardT action
  where
-  interned :: StdInterned prov (StdM prov cfg m)
+  interned :: StdInterned (StdM cfg m)
   interned = mkInternedValues
 
   fun :: StdIdT m a -> m a
   fun act = runFreshIdT act =<< newRef (1 :: Int)
 
 runWithBasicEffects
-  :: (MonadIO m, MonadAtomicRef m, SBoolI prov)
+  :: (MonadIO m, MonadAtomicRef m)
   => Options
-  -> (GivenStdInterned prov cfg m => StandardT prov cfg (StdIdT m) a)
+  -> (GivenStdInterned cfg m => StandardT cfg (StdIdT m) a)
   -> m a
 runWithBasicEffects opts action = runWithBasicEffectsAndStats opts Nothing action
 
 -- | Type-parameterized runner with compile-time configuration dispatch.
 --
 -- When configuration flags are known at compile time (established via 'withEvalCfg'),
--- this function enables zero-cost conditional execution. The @prov@ singleton from
--- @cfg@ is extracted and used to branch at the top level, calling specialized runners
--- for @'True@ or @'False@.
+-- this function enables zero-cost conditional execution.
 --
 -- The action receives interned values via the @GivenStdInterned@ constraint,
 -- enabling zero-overhead access to singleton values (true, false, null, [], {}).
@@ -559,7 +493,7 @@ runWithBasicEffects opts action = runWithBasicEffectsAndStats opts Nothing actio
 -- Example usage:
 --
 -- @
--- main' opts = withEvalCfg (isEvalStats opts) (isValues opts) (isTrace opts) $
+-- main' opts = withEvalCfg (isEvalStats opts) (isTrace opts) $
 --   \\(_ :: Proxy cfg) ->
 --     runWithStoreEffectsIOT \@cfg opts myAction
 -- @
@@ -567,24 +501,9 @@ runWithStoreEffectsIOT
   :: forall (cfg :: EvalCfg) a
    . KnownEvalCfg cfg
   => Options
-  -> (forall (prov :: Bool) m. (StdBase m, KnownEvalCfg cfg, SBoolI prov, Typeable prov, GivenStdInterned prov cfg m) => StdM prov cfg m a)
+  -> (forall m. (StdBase m, KnownEvalCfg cfg, GivenStdInterned cfg m) => StdM cfg m a)
   -> IO a
-runWithStoreEffectsIOT opts action =
-  -- Branch on provenance singleton at the top level.
-  -- This allows GHC to specialize the entire evaluation path for each case.
-  case singProv @cfg of
-    STrue  -> runWithStoreEffectsIOT' @'True  @cfg opts action
-    SFalse -> runWithStoreEffectsIOT' @'False @cfg opts action
-{-# INLINABLE runWithStoreEffectsIOT #-}
-
--- | Internal helper for runWithStoreEffectsIOT with explicit provenance.
-runWithStoreEffectsIOT'
-  :: forall (prov :: Bool) (cfg :: EvalCfg) a
-   . (KnownEvalCfg cfg, SBoolI prov, Typeable prov)
-  => Options
-  -> (forall m. (StdBase m, KnownEvalCfg cfg, SBoolI prov, Typeable prov, GivenStdInterned prov cfg m) => StdM prov cfg m a)
-  -> IO a
-runWithStoreEffectsIOT' opts action = do
+runWithStoreEffectsIOT opts action = do
   -- Create stats collector only when type-level says it's needed
   -- When CfgStats cfg ~ 'False, GHC eliminates the Just branch
   mstats <- ifStats @cfg (Just <$> newEvalStats) (pure Nothing)
@@ -596,7 +515,7 @@ runWithStoreEffectsIOT' opts action = do
   -- Run the action
   result <- case getStoreMode opts of
     StoreRemote ->
-      runWithBasicEffectsAndStats opts mstats (action :: StdM prov cfg IO a)
+      runWithBasicEffectsAndStats opts mstats (action :: StdM cfg IO a)
     StoreOverlay ->
       let
         storeDir = Store.StoreDir $ encodeUtf8 $ toText $ getStoreDir opts
@@ -606,11 +525,11 @@ runWithStoreEffectsIOT' opts action = do
           }
       in
         evalOverlayStoreT storeCfg defaultOverlayStoreState $
-          runWithBasicEffectsAndStats opts mstats (action :: StdM prov cfg (OverlayStoreT IO) a)
+          runWithBasicEffectsAndStats opts mstats (action :: StdM cfg (OverlayStoreT IO) a)
 
   -- Print stats only when enabled at type level
   -- When CfgStats cfg ~ 'False, GHC eliminates this branch
   whenStatsM @cfg $ traverse_ printEvalStats mstats
 
   pure result
-{-# INLINABLE runWithStoreEffectsIOT' #-}
+{-# INLINABLE runWithStoreEffectsIOT #-}

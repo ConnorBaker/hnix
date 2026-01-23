@@ -3,9 +3,8 @@
 --
 -- This module provides compile-time specialization for evaluation hot paths
 -- using a type-level configuration record. Configuration flags (stats collection,
--- provenance tracking, tracing) are bundled into a single 'EvalCfg' type,
--- allowing GHC to generate specialized code with zero runtime overhead for
--- disabled features.
+-- tracing) are bundled into a single 'EvalCfg' type, allowing GHC to generate
+-- specialized code with zero runtime overhead for disabled features.
 --
 -- == Usage
 --
@@ -18,23 +17,22 @@
 --   opts <- parseOptions
 --   withEvalCfg
 --     (isEvalStats opts)
---     (isValues opts)
 --     (isTrace opts)
 --     (\\(_ :: Proxy DefaultCfg) -> runEvaluation \@DefaultCfg ...)
 --     (\\(_ :: Proxy cfg) -> runEvaluation \@cfg ...)
 -- @
 --
--- Within evaluation code, use 'singStats', 'singProv', and 'singTrace'
+-- Within evaluation code, use 'singStats' and 'singTrace'
 -- for zero-cost conditional execution:
 --
 -- @
 -- evalExpr :: forall cfg m. KnownEvalCfg cfg => Expr -> m Value
--- evalExpr expr = case singProv \@cfg of
---   STrue  -> evalWithProvenance expr
---   SFalse -> evalWithoutProvenance expr
+-- evalExpr expr = case singTrace \@cfg of
+--   STrue  -> evalWithTracing expr
+--   SFalse -> evalWithoutTracing expr
 -- @
 --
--- When @CfgProv cfg ~ 'False@, GHC eliminates the 'STrue' branch entirely via
+-- When @CfgTrace cfg ~ 'False@, GHC eliminates the 'STrue' branch entirely via
 -- case-of-known-constructor optimization.
 module Nix.Config.Singleton
   ( -- * Configuration type
@@ -44,23 +42,18 @@ module Nix.Config.Singleton
   , DefaultCfg
     -- * Per-flag constraints (use these for minimal constraints)
   , HasStatsCfg
-  , HasProvCfg
   , HasTraceCfg
     -- * Type families
   , CfgStats
-  , CfgProv
   , CfgTrace
     -- * Singleton accessors (zero-cost)
   , singStats
-  , singProv
   , singTrace
     -- * Helper functions (zero-cost dispatch)
   , ifSBool
   , ifStats
-  , ifProv
   , ifTrace
   , whenStatsM
-  , whenProvM
   , whenTraceM
     -- * Runtime bridge
   , withEvalCfg
@@ -80,50 +73,37 @@ import           Data.Singletons.Bool (SBool(..), SBoolI(..), sbool)
 -- compile-time specialization.
 data EvalCfg = MkEvalCfg
   { _cfgStats :: Bool  -- ^ Collect evaluation statistics
-  , _cfgProv  :: Bool  -- ^ Track provenance information
   , _cfgTrace :: Bool  -- ^ Enable expression tracing
   }
 
 -- | Default configuration with all flags disabled.
 -- Use this for tests and simple usage where no special features are needed.
-type DefaultCfg = 'MkEvalCfg 'False 'False 'False
+type DefaultCfg = 'MkEvalCfg 'False 'False
 
 -- | Extract the stats flag from a configuration.
 type family CfgStats (cfg :: EvalCfg) :: Bool where
-  CfgStats ('MkEvalCfg s _ _) = s
-
--- | Extract the provenance flag from a configuration.
-type family CfgProv (cfg :: EvalCfg) :: Bool where
-  CfgProv ('MkEvalCfg _ p _) = p
+  CfgStats ('MkEvalCfg s _) = s
 
 -- | Extract the trace flag from a configuration.
 type family CfgTrace (cfg :: EvalCfg) :: Bool where
-  CfgTrace ('MkEvalCfg _ _ t) = t
+  CfgTrace ('MkEvalCfg _ t) = t
 
 -- | Constraint that all configuration flags are known at compile time.
 --
--- Functions with this constraint can use 'singStats', 'singProv', and
--- 'singTrace' for zero-cost conditional execution.
+-- Functions with this constraint can use 'singStats' and 'singTrace'
+-- for zero-cost conditional execution.
 --
 -- Includes 'Typeable cfg' because renderFrames requires @Typeable v@ where
 -- @v = StdValM cfg m@, which needs @Typeable cfg@.
--- Includes 'Typeable (CfgProv cfg)' because the provenance type is used
--- throughout the evaluation stack and needs Typeable for error handling.
 type KnownEvalCfg cfg =
   ( SBoolI (CfgStats cfg)
-  , SBoolI (CfgProv cfg)
   , SBoolI (CfgTrace cfg)
   , Typeable cfg
-  , Typeable (CfgProv cfg)
   )
 
 -- | Constraint for functions that only need stats flag.
 -- Use this instead of 'KnownEvalCfg' to minimize constraints.
 type HasStatsCfg cfg = SBoolI (CfgStats cfg)
-
--- | Constraint for functions that only need provenance flag.
--- Use this instead of 'KnownEvalCfg' to minimize constraints.
-type HasProvCfg cfg = SBoolI (CfgProv cfg)
 
 -- | Constraint for functions that only need trace flag.
 -- Use this instead of 'KnownEvalCfg' to minimize constraints.
@@ -139,14 +119,6 @@ type HasTraceCfg cfg = SBoolI (CfgTrace cfg)
 singStats :: forall cfg. HasStatsCfg cfg => SBool (CfgStats cfg)
 singStats = sbool @(CfgStats cfg)
 {-# INLINE singStats #-}
-
--- | Access the provenance singleton for compile-time dispatch.
---
--- When 'CfgProv cfg ~ 'False', the 'STrue' branch is eliminated entirely
--- by GHC's case-of-known-constructor optimization.
-singProv :: forall cfg. HasProvCfg cfg => SBool (CfgProv cfg)
-singProv = sbool @(CfgProv cfg)
-{-# INLINE singProv #-}
 
 -- | Access the trace singleton for compile-time dispatch.
 singTrace :: forall cfg. HasTraceCfg cfg => SBool (CfgTrace cfg)
@@ -177,11 +149,6 @@ ifStats :: forall cfg a. HasStatsCfg cfg => a -> a -> a
 ifStats = ifSBool (singStats @cfg)
 {-# INLINE ifStats #-}
 
--- | Zero-cost conditional on provenance flag.
-ifProv :: forall cfg a. HasProvCfg cfg => a -> a -> a
-ifProv = ifSBool (singProv @cfg)
-{-# INLINE ifProv #-}
-
 -- | Zero-cost conditional on trace flag.
 ifTrace :: forall cfg a. HasTraceCfg cfg => a -> a -> a
 ifTrace = ifSBool (singTrace @cfg)
@@ -191,11 +158,6 @@ ifTrace = ifSBool (singTrace @cfg)
 whenStatsM :: forall cfg m. (HasStatsCfg cfg, Applicative m) => m () -> m ()
 whenStatsM action = ifStats @cfg action (pure ())
 {-# INLINE whenStatsM #-}
-
--- | Execute action only when provenance enabled (zero-cost when disabled).
-whenProvM :: forall cfg m. (HasProvCfg cfg, Applicative m) => m () -> m ()
-whenProvM action = ifProv @cfg action (pure ())
-{-# INLINE whenProvM #-}
 
 -- | Execute action only when tracing enabled (zero-cost when disabled).
 whenTraceM :: forall cfg m. (HasTraceCfg cfg, Applicative m) => m () -> m ()
@@ -214,7 +176,6 @@ whenTraceM action = ifTrace @cfg action (pure ())
 --   opts <- parseOptions
 --   withEvalCfg
 --     (isEvalStats opts)
---     (isValues opts)
 --     (isTrace opts)
 --     (\\(_ :: Proxy DefaultCfg) -> runEvaluation \@DefaultCfg ...)
 --     (\\(_ :: Proxy cfg) -> do
@@ -231,18 +192,13 @@ whenTraceM action = ifTrace @cfg action (pure ())
 -- has a statically-known @cfg@ type.
 withEvalCfg
   :: Bool  -- ^ Collect stats
-  -> Bool  -- ^ Track provenance
   -> Bool  -- ^ Enable tracing
   -> (Proxy DefaultCfg -> r)  -- ^ Fast path for default config (all flags False)
   -> (forall cfg. KnownEvalCfg cfg => Proxy cfg -> r)
   -> r
-withEvalCfg stats prov tracing kDefault k = case (stats, prov, tracing) of
-  (False, False, False) -> kDefault (Proxy @DefaultCfg)
-  (False, False, True)  -> k (Proxy @('MkEvalCfg 'False 'False 'True))
-  (False, True,  False) -> k (Proxy @('MkEvalCfg 'False 'True  'False))
-  (False, True,  True)  -> k (Proxy @('MkEvalCfg 'False 'True  'True))
-  (True,  False, False) -> k (Proxy @('MkEvalCfg 'True  'False 'False))
-  (True,  False, True)  -> k (Proxy @('MkEvalCfg 'True  'False 'True))
-  (True,  True,  False) -> k (Proxy @('MkEvalCfg 'True  'True  'False))
-  (True,  True,  True)  -> k (Proxy @('MkEvalCfg 'True  'True  'True))
+withEvalCfg stats tracing kDefault k = case (stats, tracing) of
+  (False, False) -> kDefault (Proxy @DefaultCfg)
+  (False, True)  -> k (Proxy @('MkEvalCfg 'False 'True))
+  (True,  False) -> k (Proxy @('MkEvalCfg 'True  'False))
+  (True,  True)  -> k (Proxy @('MkEvalCfg 'True  'True))
 {-# INLINE withEvalCfg #-}

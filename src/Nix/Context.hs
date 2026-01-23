@@ -4,9 +4,8 @@ module Nix.Context
   ( Context(..)
   , CtxCfg
   , HasEvalCfg
-    -- * Per-flag constraint aliases (shorter than 'HasProvCfg (CtxCfg e)')
+    -- * Per-flag constraint aliases (shorter than 'HasStatsCfg (CtxCfg e)')
   , HasStatsCfgE
-  , HasProvCfgE
   , HasTraceCfgE
   , newContext
   , newContextWithStats
@@ -17,7 +16,7 @@ module Nix.Context
 import           Nix.Prelude
 import           GHC.TypeLits                   ( TypeError, ErrorMessage(..) )
 import           Nix.Config.Singleton           ( EvalCfg, KnownEvalCfg
-                                                , HasStatsCfg, HasProvCfg, HasTraceCfg
+                                                , HasStatsCfg, HasTraceCfg
                                                 )
 import           Nix.Options                    ( Options )
 import           Nix.Scope                      ( Scopes )
@@ -61,10 +60,6 @@ type HasEvalCfg e = KnownEvalCfg (CtxCfg e)
 -- | Constraint for functions that only need stats flag from environment.
 -- Use this instead of @HasStatsCfg (CtxCfg e)@ to minimize verbosity.
 type HasStatsCfgE e = HasStatsCfg (CtxCfg e)
-
--- | Constraint for functions that only need provenance flag from environment.
--- Use this instead of @HasProvCfg (CtxCfg e)@ to minimize verbosity.
-type HasProvCfgE e = HasProvCfg (CtxCfg e)
 
 -- | Constraint for functions that only need trace flag from environment.
 -- Use this instead of @HasTraceCfg (CtxCfg e)@ to minimize verbosity.

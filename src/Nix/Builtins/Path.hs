@@ -48,7 +48,6 @@ import qualified Nix.Core.AttrSet              as NixA
 import           Data.Scientific                ( floatingOrInteger )
 import qualified Data.Map.Strict               as M
 import qualified Data.Text                     as Text
-import qualified Data.Time.Clock.POSIX         as Time
 import qualified Data.Time.Calendar            as Time
 import qualified Data.Time.LocalTime           as Time
 import qualified Data.Time.Format              as Time
@@ -61,8 +60,6 @@ import qualified System.PosixCompat.Files      as Posix
 import qualified Data.ByteString               as BS
 import           Nix.Atoms
 import           Nix.Builtins.Internal
-import           Nix.Config.Singleton           ( HasProvCfg )
-import           Nix.Context                    ( CtxCfg )
 import           Nix.Convert
 import qualified Nix.Core.List                 as L
 import           Nix.Effects
@@ -459,7 +456,7 @@ isStorePath opts path =
 -- NOTE: Takes withNixContext as a parameter to avoid circular module dependencies.
 scopedImportNixWith
   :: forall e t f m
-   . (MonadNix e t f m, HasProvCfg (CtxCfg e))
+   . (MonadNix e t f m)
   => (Maybe Path -> m (NValue t f m) -> m (NValue t f m))
   -> NValue t f m
   -> NValue t f m
@@ -501,7 +498,7 @@ scopedImportNixWith withNixContext asetArg pathArg =
 -- NOTE: Takes withNixContext as a parameter to avoid circular module dependencies.
 importNixWith
   :: forall e t f m
-   . (MonadNix e t f m, HasProvCfg (CtxCfg e))
+   . (MonadNix e t f m)
   => (Maybe Path -> m (NValue t f m) -> m (NValue t f m))
   -> NValue t f m
   -> m (NValue t f m)

@@ -45,7 +45,6 @@ data Options =
     , getEvalTimingThresholdMs :: Int
     , isEvalStats    :: Bool
     , isThunks       :: Bool
-    , isValues       :: Bool
     , isShowScopes   :: Bool
     , getReduce      :: Maybe Path
     , isReduceSets   :: Bool
@@ -93,7 +92,6 @@ defaultOptions currentTime =
     , getEvalTimingThresholdMs = 1000
     , isEvalStats    = False
     , isThunks       = False
-    , isValues       = False
     , isShowScopes   = False
     , getReduce      = mempty
     , isReduceSets   = False

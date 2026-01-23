@@ -3,9 +3,8 @@
 -- | Inspection tests for hnix evaluator specialization.
 --
 -- These tests use @inspection-testing@ to verify that GHC's optimizations
--- produce the expected zero-overhead code for the common evaluation case:
+-- produce the expected zero-overhead code for the default configuration:
 --
--- - Provenance disabled (@prov ~ 'False@)
 -- - Default configuration (@cfg ~ DefaultCfg@)
 --
 -- == What We Test
@@ -14,20 +13,10 @@
 --    expression, GHC should eliminate the @STrue@ branch entirely via
 --    case-of-known-constructor optimization.
 --
--- 2. __Newtype erasure__: The @Cited@, @CitedF@, and @ThunkF@ newtype wrappers
---    should be completely erased in the generated code, leaving no runtime
---    indirection.
---
--- 3. __Type class specialization__: No @SBoolI@ dictionaries should remain
+-- 2. __Type class specialization__: No @SBoolI@ dictionaries should remain
 --    in the generated code for concrete type applications.
 --
--- 4. __Provenance type elimination__: Types like @NCited@, @Provenance@, and
---    @Identity@ should not appear in the Core for @prov ~ 'False@ code paths.
---
--- 5. __Instance method specialization__: Functor, Applicative, Comonad,
---    Foldable, Traversable, and HasCitations instances should all specialize.
---
--- 6. __Config dispatch__: All config flags (stats, prov, trace) should dispatch
+-- 3. __Config dispatch__: All config flags (stats, trace) should dispatch
 --    without runtime overhead when using DefaultCfg.
 --
 -- == Running the Tests
@@ -57,22 +46,10 @@ import           Relude
 -- Import test modules to trigger their compile-time inspection checks.
 -- These imports are "redundant" in terms of runtime use, but the act of
 -- compiling them triggers the inspection tests via Template Haskell.
-import           Inspection.AttrSet     ()
-import           Inspection.Cited       ()
-import           Inspection.Coerce      ()
-import           Inspection.Comonad     ()
 import           Inspection.Config      ()
-import           Inspection.Convert     ()
-import           Inspection.Functor     ()
-import           Inspection.HasCitations ()
-import           Inspection.Integration ()
-import           Inspection.MonadThunk  ()
 import           Inspection.NixString   ()
-import           Inspection.Protocol    ()
 import           Inspection.Scope       ()
 import           Inspection.Singleton   ()
-import           Inspection.Thunk       ()
-import           Inspection.Value       ()
 
 -- | Run the inspection tests.
 --
@@ -87,29 +64,13 @@ main = do
   putStrLn ""
   putStrLn "Test modules:"
   putStrLn ""
-  putStrLn "Core Cited/Provenance tests:"
-  putStrLn "  1. Cited      - extractCited/provenanceCited specialization"
-  putStrLn "  2. Coerce     - Newtype coercion zero-cost verification"
-  putStrLn "  3. Comonad    - extract/duplicate for Cited and CitedF"
-  putStrLn "  4. Functor    - Functor, Applicative, Foldable, Traversable"
-  putStrLn "  5. HasCitations - citations1/addProvenance1 specialization"
-  putStrLn ""
   putStrLn "Configuration and dispatch tests:"
-  putStrLn "  6. Config     - singStats/singProv/singTrace dispatch"
-  putStrLn "  7. Singleton  - sbool @'False/@'True branch elimination"
-  putStrLn ""
-  putStrLn "Evaluator component tests:"
-  putStrLn "  8. Thunk      - CitedF extract/fmap specialization"
-  putStrLn "  9. Integration - Full wrapper chain erasure"
-  putStrLn "  10. MonadThunk - thunk/force/query operations"
-  putStrLn "  11. Value     - NValue construction and extraction"
-  putStrLn "  12. Convert   - Coercion and unwrapping operations"
+  putStrLn "  1. Config     - singStats/singTrace dispatch"
+  putStrLn "  2. Singleton  - sbool @'False/@'True branch elimination"
   putStrLn ""
   putStrLn "Data structure tests:"
-  putStrLn "  13. Scope     - scopeLookup efficiency"
-  putStrLn "  14. NixString - String construction and extraction"
-  putStrLn "  15. AttrSet   - Attribute set pattern matching and construction"
-  putStrLn "  16. Protocol  - Protocol operations for builtins (list/attrset)"
+  putStrLn "  3. Scope     - scopeLookup efficiency"
+  putStrLn "  4. NixString - String construction and extraction"
   putStrLn ""
   putStrLn "All inspection tests passed!"
   putStrLn "(Actual test counts verified at compile time)"

@@ -61,9 +61,9 @@ runDerivationCommand currentTime = \case
     -- Use minimal config for derivation show (no stats, no tracing)
     let
       runDerivation
-        :: forall (prov :: Bool) (cfg :: EvalCfg) m
-         . (StdBase m, KnownEvalCfg cfg, SBoolI prov, Typeable prov, GivenStdInterned prov cfg m)
-        => StdM prov cfg m ()
+        :: forall (cfg :: EvalCfg) m
+         . (StdBase m, KnownEvalCfg cfg, GivenStdInterned cfg m)
+        => StdM cfg m ()
       runDerivation = do
         -- Get initial paths from either --expr or positional arguments
         initialPaths <- case drvShowExpr of
@@ -99,7 +99,7 @@ runDerivationCommand currentTime = \case
             then LBS.putStr $ A.encodePretty' prettyConfig jsonOutput
             else LBS.putStr $ A.encode jsonOutput
           putStrLn ""
-    withEvalCfg False False False
+    withEvalCfg False False
       (\(_ :: Proxy DefaultCfg) ->
         runWithStoreEffectsIOT @DefaultCfg opts runDerivation
       )
@@ -112,8 +112,8 @@ runDerivationCommand currentTime = \case
 
 -- | Evaluate an expression and extract its drvPath
 evalExprToDrvPath
-  :: forall (prov :: Bool) (cfg :: EvalCfg) m. (StdBase m, KnownEvalCfg cfg, SBoolI prov, Typeable prov, GivenStdInterned prov cfg m)
-  => Text -> StdM prov cfg m Path
+  :: forall (cfg :: EvalCfg) m. (StdBase m, KnownEvalCfg cfg, GivenStdInterned cfg m)
+  => Text -> StdM cfg m Path
 evalExprToDrvPath expr = do
   case parseNixTextLoc expr of
     Left err -> fail $ "Parse error: " <> show err
@@ -123,18 +123,18 @@ evalExprToDrvPath expr = do
       case demanded of
         NVSet _ attrs -> case attrSetLookup sDrvPath attrs of
           Just drvPathVal -> do
-            drvPathStr <- ignoreContext <$> (fromValue drvPathVal :: StdM prov cfg m NixString)
+            drvPathStr <- ignoreContext <$> (fromValue drvPathVal :: StdM cfg m NixString)
             pure $ coerce $ toString drvPathStr
           Nothing -> fail "Expression does not evaluate to a derivation (missing drvPath)"
         _ -> fail "Expression does not evaluate to an attribute set"
 
 -- | Recursively collect all derivation paths including dependencies
 collectRecursiveDrvPaths
-  :: forall (prov :: Bool) (cfg :: EvalCfg) m. (StdBase m, KnownEvalCfg cfg, SBoolI prov, Typeable prov, GivenStdInterned prov cfg m)
-  => [Path] -> StdM prov cfg m [Path]
+  :: forall (cfg :: EvalCfg) m. (StdBase m, KnownEvalCfg cfg, GivenStdInterned cfg m)
+  => [Path] -> StdM cfg m [Path]
 collectRecursiveDrvPaths initialPaths = do
   -- Use a set to track visited paths and avoid duplicates
-  let go :: Set Path -> [Path] -> StdM prov cfg m (Set Path)
+  let go :: Set Path -> [Path] -> StdM cfg m (Set Path)
       go visited [] = pure visited
       go visited (p:ps)
         | p `Set.member` visited = go visited ps
@@ -150,7 +150,7 @@ main' :: Options -> IO ()
 main' opts@Options{..} =
   -- Bridge runtime options to type-level configuration.
   -- This enables compile-time specialization in evaluation hot paths.
-  withEvalCfg isEvalStats isValues isTrace
+  withEvalCfg isEvalStats isTrace
     (\(_ :: Proxy DefaultCfg) ->
       runWithStoreEffectsIOT @DefaultCfg opts execContentsFilesOrRepl
     )
@@ -161,7 +161,7 @@ main' opts@Options{..} =
   --  2021-07-15: NOTE: This logic should be weaved stronger through CLI options logic (OptParse-Applicative code)
   -- As this logic is not stated in the CLI documentation, for example. So user has no knowledge of these.
   execContentsFilesOrRepl
-    :: forall (prov :: Bool) (cfg :: EvalCfg) m. (StdBase m, KnownEvalCfg cfg, SBoolI prov, Typeable prov, GivenStdInterned prov cfg m) => StdM prov cfg m ()
+    :: forall (cfg :: EvalCfg) m. (StdBase m, KnownEvalCfg cfg, GivenStdInterned cfg m) => StdM cfg m ()
   execContentsFilesOrRepl =
     fromMaybe
       loadFromCliFilePathList
@@ -170,7 +170,7 @@ main' opts@Options{..} =
         loadExpressionFromFile
    where
     -- | The base case: read expressions from the last CLI directive (@[FILE]@) listed on the command line.
-    loadFromCliFilePathList :: StdM prov cfg m ()
+    loadFromCliFilePathList :: StdM cfg m ()
     loadFromCliFilePathList =
       case getFilePaths of
         []     -> runRepl
@@ -178,51 +178,51 @@ main' opts@Options{..} =
         _paths -> processSeveralFiles (coerce _paths)
      where
       -- | Fall back to running the REPL
-      runRepl :: StdM prov cfg m ()
+      runRepl :: StdM cfg m ()
       runRepl = withEmptyNixContext Repl.main
 
-      readExpressionFromStdin :: StdM prov cfg m ()
+      readExpressionFromStdin :: StdM cfg m ()
       readExpressionFromStdin =
-        processExpr @prov @cfg =<< liftIO Text.IO.getContents
+        processExpr @cfg =<< liftIO Text.IO.getContents
 
-    processSeveralFiles :: [Path] -> StdM prov cfg m ()
+    processSeveralFiles :: [Path] -> StdM cfg m ()
     processSeveralFiles = traverse_ processFile
      where
-      processFile path = handleResult @prov @cfg (pure path) =<< parseNixFileLoc path
+      processFile path = handleResult @cfg (pure path) =<< parseNixFileLoc path
 
     -- |  The `--read` option: load expression from a serialized file.
-    loadBinaryCacheFile :: Maybe (StdM prov cfg m ())
+    loadBinaryCacheFile :: Maybe (StdM cfg m ())
     loadBinaryCacheFile =
       (\ (binaryCacheFile :: Path) ->
         do
           let file = replaceExtension binaryCacheFile "nixc"
-          processCLIOptions @prov @cfg (pure file) =<< liftIO (readCache binaryCacheFile)
+          processCLIOptions @cfg (pure file) =<< liftIO (readCache binaryCacheFile)
       ) <$> getReadFrom
 
     -- | The `--expr` option: read expression from the argument string
-    loadLiteralExpression :: Maybe (StdM prov cfg m ())
-    loadLiteralExpression = processExpr @prov @cfg <$> getExpression
+    loadLiteralExpression :: Maybe (StdM cfg m ())
+    loadLiteralExpression = processExpr @cfg <$> getExpression
 
     -- | The `--file` argument: evaluate expression from the specified file
-    loadExpressionFromFile :: Maybe (StdM prov cfg m ())
+    loadExpressionFromFile :: Maybe (StdM cfg m ())
     loadExpressionFromFile =
       (\fp -> case fp of
-        "-" -> processExpr @prov @cfg =<< liftIO Text.IO.getContents
-        _   -> let path = coerce fp in handleResult @prov @cfg (pure path) =<< parseNixFileLoc path
+        "-" -> processExpr @cfg =<< liftIO Text.IO.getContents
+        _   -> let path = coerce fp in handleResult @cfg (pure path) =<< parseNixFileLoc path
       ) <$> getFromFile
 
   processExpr
-    :: forall (prov :: Bool) (cfg :: EvalCfg) m. (StdBase m, KnownEvalCfg cfg, SBoolI prov, Typeable prov, GivenStdInterned prov cfg m)
-    => Text -> StdM prov cfg m ()
-  processExpr = handleResult @prov @cfg mempty . parseNixTextLoc
+    :: forall (cfg :: EvalCfg) m. (StdBase m, KnownEvalCfg cfg, GivenStdInterned cfg m)
+    => Text -> StdM cfg m ()
+  processExpr = handleResult @cfg mempty . parseNixTextLoc
 
-  withEmptyNixContext :: (StdBase m, KnownEvalCfg cfg, SBoolI prov, Typeable prov, GivenStdInterned prov cfg m) => StdM prov cfg m a -> StdM prov cfg m a
+  withEmptyNixContext :: (StdBase m, KnownEvalCfg cfg, GivenStdInterned cfg m) => StdM cfg m a -> StdM cfg m a
   withEmptyNixContext = withNixContext mempty
 
   -- NOTE: @handleResult@ & @process@ have significant size & complexity - consider decomposing.
   handleResult
-    :: forall (prov :: Bool) (cfg :: EvalCfg) m err. (StdBase m, KnownEvalCfg cfg, SBoolI prov, Typeable prov, GivenStdInterned prov cfg m, Show err)
-    => Maybe Path -> Either err NExprLoc -> StdM prov cfg m ()
+    :: forall (cfg :: EvalCfg) m err. (StdBase m, KnownEvalCfg cfg, GivenStdInterned cfg m, Show err)
+    => Maybe Path -> Either err NExprLoc -> StdM cfg m ()
   handleResult mpath =
     either
       (\ err ->
@@ -235,13 +235,13 @@ main' opts@Options{..} =
 
       (\ expr ->
         do
-          catch (processCLIOptions @prov @cfg mpath expr) $
+          catch (processCLIOptions @cfg mpath expr) $
             \case
               NixException frames ->
                 errorWithoutStackTrace . show =<<
                   renderFrames
-                    @(StdValM prov cfg m)
-                    @(StdThunM prov cfg m)
+                    @(StdValM cfg m)
+                    @(StdThunM cfg m)
                     frames
 
           when isRepl $
@@ -255,8 +255,8 @@ main' opts@Options{..} =
   --  2021-07-15: NOTE: Logic of CLI Option processing is scattered over several functions, needs to be consolicated.
   -- Now uses type-level dispatch for stats/tracing via KnownEvalCfg cfg.
   processCLIOptions
-    :: forall (prov :: Bool) (cfg :: EvalCfg) m. (StdBase m, KnownEvalCfg cfg, SBoolI prov, Typeable prov, GivenStdInterned prov cfg m)
-    => Maybe Path -> NExprLoc -> StdM prov cfg m ()
+    :: forall (cfg :: EvalCfg) m. (StdBase m, KnownEvalCfg cfg, GivenStdInterned cfg m)
+    => Maybe Path -> NExprLoc -> StdM cfg m ()
   processCLIOptions mpath expr
     | isEvaluate =
       if
@@ -281,10 +281,10 @@ main' opts@Options{..} =
     evaluateExprWith evaluator = evaluateExpression (coerce mpath) evaluator printer
 
     printer
-      :: StdValM prov cfg m
-      -> StdM prov cfg m ()
+      :: StdValM cfg m
+      -> StdM cfg m ()
     printer
-      | isFinder    = findAttrs <=< fromValue @(AttrSet (StdValM prov cfg m))
+      | isFinder    = findAttrs <=< fromValue @(AttrSet (StdValM cfg m))
       | otherwise = printer'
      where
       -- 2021-05-27: NOTE: With naive fix of the #941
@@ -296,30 +296,29 @@ main' opts@Options{..} =
         | isXml     = out (ignoreContext . toXML)       normalForm
         | isJson    = outJson toJSONNixString           normalForm
         | isStrict  = out (show . prettyNValue)         normalForm
-        | isValues  = out (show . prettyNValueProv)     removeEffects
         | otherwise = out (show . prettyNValue)         removeEffects
        where
         out
           :: (b -> Text)
-          -> (a -> StdM prov cfg m b)
+          -> (a -> StdM cfg m b)
           -> a
-          -> StdM prov cfg m ()
+          -> StdM cfg m ()
         out transform val = liftIO . Text.IO.putStrLn . transform <=< val
 
         -- | Special case for JSON: toJSONNixString is monadic, not pure
         outJson
-          :: (b -> StdM prov cfg m NixString)
-          -> (a -> StdM prov cfg m b)
+          :: (b -> StdM cfg m NixString)
+          -> (a -> StdM cfg m b)
           -> a
-          -> StdM prov cfg m ()
+          -> StdM cfg m ()
         outJson transform val a = liftIO . Text.IO.putStrLn . ignoreContext =<< transform =<< val a
 
       findAttrs
-        :: AttrSet (StdValM prov cfg m)
-        -> StdM prov cfg m ()
+        :: AttrSet (StdValM cfg m)
+        -> StdM cfg m ()
       findAttrs = go mempty
        where
-        go :: Text -> AttrSet (StdValM prov cfg m) -> StdM prov cfg m ()
+        go :: Text -> AttrSet (StdValM cfg m) -> StdM cfg m ()
         go prefix s =
           traverse_
             (\ (k, mv) ->
@@ -343,7 +342,7 @@ main' opts@Options{..} =
                 (\ (k, nv) ->
                   (k, ) <$>
                   free
-                    (\ (ThunkF (extract -> Thunk _ ref)) ->
+                    (\ (ThunkF (CitedF (Identity (Thunk _ ref)))) ->
                       do
                         let
                           path         = prefix <> k
@@ -384,16 +383,16 @@ main' opts@Options{..} =
             _                              -> (True , True )
 
           forceEntry
-            :: MonadValue a (StdM prov cfg m)
+            :: MonadValue a (StdM cfg m)
             => Text
             -> a
-            -> StdM prov cfg m (Maybe a)
+            -> StdM cfg m (Maybe a)
           forceEntry k v =
             catch
               (pure <$> demand v)
               fun
            where
-            fun :: NixException -> StdM prov cfg m (Maybe a)
+            fun :: NixException -> StdM cfg m (Maybe a)
             fun (coerce -> frames) =
               do
                 liftIO
@@ -401,8 +400,8 @@ main' opts@Options{..} =
                   . (("Exception forcing " <> k <> ": ") <>)
                   . show =<<
                   renderFrames
-                      @(StdValM prov cfg m)
-                      @(StdThunM prov cfg m)
+                      @(StdValM cfg m)
+                      @(StdThunM cfg m)
                       frames
                 pure Nothing
 

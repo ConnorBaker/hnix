@@ -36,16 +36,16 @@ import           Test.Tasty.HUnit
 
 -- | Test-specific type aliases using default configuration.
 --
--- DefaultCfg has CfgProv ~ 'False, so we use provenance-disabled types.
-type StandardIO = StdM 'False DefaultCfg IO
-type StdVal = ValueF 'False StandardIO
-type StdThun = ThunkF 'False StandardIO
+-- DefaultCfg has no provenance, so we use the standard types.
+type StandardIO = StdM DefaultCfg IO
+type StdVal = ValueF StandardIO
+type StdThun = ThunkF StandardIO
 
 -- | Run with basic effects in IO using default configuration.
 --
 -- The action receives the 'GivenStdInterned' constraint from 'runWithBasicEffects'
 -- via 'give', enabling zero-overhead access to interned values.
-runWithBasicEffectsIO :: Options -> (GivenStdInterned 'False DefaultCfg IO => StdM 'False DefaultCfg IO a) -> IO a
+runWithBasicEffectsIO :: Options -> (GivenStdInterned DefaultCfg IO => StdM DefaultCfg IO a) -> IO a
 runWithBasicEffectsIO = runWithBasicEffects
 
 -- | Run an action with a temporarily modified environment variable.
@@ -104,7 +104,7 @@ nixEvalText expr =
 
 assertEvalMatchesNix
   :: ( Options
-    -> Text -> IO (NValue t (CitedF 'False StandardIO) StandardIO)
+    -> Text -> IO StdVal
     )
   -> (Text -> IO Text)
   -> Text
