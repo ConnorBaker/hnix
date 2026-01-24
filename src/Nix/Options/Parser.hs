@@ -273,7 +273,7 @@ nixCommandInfo current =
 -- | Combined parser: try subcommands first, fall back to legacy options
 nixCommand :: UTCTime -> Parser Command
 nixCommand current =
-  hsubparser derivationSubcommand <|> (LegacyCommand <$> nixOptions current)
+  hsubparser (derivationSubcommand <> compileSubcommand) <|> (LegacyCommand <$> nixOptions current)
 
 -- | The `derivation` subcommand group
 derivationSubcommand :: Mod CommandFields Command
@@ -319,3 +319,35 @@ derivationShowOpts = DerivationShowOpts
     (  long "no-pretty"
     <> help "Print compact JSON output on a single line"
     )
+
+-- | The `compile` subcommand group
+compileSubcommand :: Mod CommandFields Command
+compileSubcommand =
+  command "compile" $ info (helper <*> compileCommand)
+    (fullDesc <> progDesc "GHC Core compilation backend commands")
+
+-- | Subcommands under `compile`
+compileCommand :: Parser Command
+compileCommand =
+  hsubparser $
+    command "eval" $ info (helper <*> compileEvalParser)
+      (fullDesc <> progDesc "Evaluate Nix expression using GHC Core backend")
+
+-- | Parser for `compile eval`
+compileEvalParser :: Parser Command
+compileEvalParser =
+  CompileCmd . CompileEval <$> compileEvalOpts
+
+-- | Options for `compile eval`
+compileEvalOpts :: Parser CompileEvalOpts
+compileEvalOpts = CompileEvalOpts
+  <$> optional (strOption
+      (  short 'E'
+      <> long "expr"
+      <> metavar "EXPR"
+      <> help "Nix expression to evaluate"
+      ))
+  <*> many (strArgument
+      (  metavar "FILES"
+      <> help "Nix files to evaluate"
+      ))

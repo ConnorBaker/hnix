@@ -1,6 +1,7 @@
 semaphore: true
 jobs: $ncpus
 optimization: 1
+write-ghc-environment-files: always
 
 -- profiling: true
 

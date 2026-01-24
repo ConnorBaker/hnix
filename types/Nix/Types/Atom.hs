@@ -154,11 +154,11 @@ checkedMul x y
   | x < 0 && y < 0 && x < maxBound `div` y = Left $ "integer overflow in multiplying " <> show x <> " * " <> show y
   | otherwise = Right (x * y)
 
--- | Checked integer division. Returns floor of division (matching Nix).
+-- | Checked integer division. Uses truncation toward zero (like C's /).
 -- Throws on division by zero.
 checkedDiv :: Int64 -> Int64 -> Either String Int64
 checkedDiv _ 0 = Left "division by zero"
-checkedDiv x y = Right (x `div` y)
+checkedDiv x y = Right (x `quot` y)
 
 -- | Checked negation. Throws on overflow (negating minBound).
 checkedNeg :: Int64 -> Either String Int64

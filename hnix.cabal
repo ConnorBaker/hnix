@@ -53,6 +53,11 @@ flag strict
   manual: True
   default: True
 
+flag compile-debug
+  description: Build compile debugging tools
+  manual: True
+  default: False
+
 -- ═══════════════════════════════════════════════════════════════════════════
 -- COMMON STANZAS
 -- ═══════════════════════════════════════════════════════════════════════════
@@ -430,6 +435,131 @@ library hnix-builtins-attrset
     -Wno-name-shadowing
 
 -- ═══════════════════════════════════════════════════════════════════════════
+-- COMPILER SUBLIBRARIES (NExpr to GHC Core)
+-- ═══════════════════════════════════════════════════════════════════════════
+
+-- | Runtime types for the compiled Nix evaluator.
+-- This is a separate sublibrary so it can be loaded by GHC's bytecode
+-- interpreter at runtime. It must be a DEFINITE library (no unfilled
+-- Backpack signatures) so GHC can find it in the package database.
+--
+-- IMPORTANT: This library intentionally does NOT depend on hnix-core or
+-- any indefinite Backpack libraries. It defines its own RuntimeParams type
+-- instead of using Params from hnix-core.
+library hnix-compile-runtime
+  import: shared-sublibrary
+  visibility: public
+  hs-source-dirs: compile-runtime
+  exposed-modules:
+    Nix.Compile.Value
+    Nix.Compile.Value.Context
+    Nix.Compile.Value.Error
+    Nix.Compile.Value.IO
+    Nix.Compile.Runtime
+    Nix.Compile.Primops
+    Nix.Compile.Primops.Arithmetic
+    Nix.Compile.Primops.Coerce
+    Nix.Compile.Primops.Collection
+    Nix.Compile.Primops.Comparison
+    Nix.Compile.Primops.Control
+    Nix.Compile.Primops.IO
+    Nix.Compile.Primops.Logical
+    Nix.Compile.Primops.Store
+    Nix.Compile.Primops.String
+    Nix.Compile.Builtins
+    Nix.Compile.Builtins.Arithmetic
+    Nix.Compile.Builtins.AttrSet
+    Nix.Compile.Builtins.Control
+    Nix.Compile.Builtins.IO
+    Nix.Compile.Builtins.List
+    Nix.Compile.Builtins.String
+    Nix.Compile.Builtins.System
+    Nix.Compile.Builtins.Type
+  build-depends:
+      base >= 4.12 && < 5
+    , hnix:hnix-types
+    , aeson
+    , array
+    , bytestring
+    , crypton
+    , deepseq >= 1.4.3
+    , directory >= 1.3
+    , hashable >= 1.2.5
+    , memory
+    , regex-tdfa
+    , relude >= 1.0.0
+    , scientific
+    , text >= 1.2
+    , unordered-containers >= 0.2.14
+    , vector >= 0.12
+
+-- | Compile NExpr to GHC Core for bytecode execution.
+-- This sublibrary provides an alternative evaluation strategy that compiles
+-- Nix expressions to GHC Core and uses GHC's bytecode interpreter for
+-- execution. This reuses GHC's thunk representation and garbage collector.
+--
+-- Note: This library depends on the main 'hnix' library which provides
+-- instantiated Backpack modules. No additional mixins needed here.
+library hnix-compile
+  import: shared-sublibrary
+  visibility: public
+  hs-source-dirs: compile
+  exposed-modules:
+    Nix.Compile.Cache
+    Nix.Compile.Monad
+    Nix.Compile.Refs
+    Nix.Compile.Expr
+    Nix.Compile.Driver
+  -- Re-export runtime modules for convenience
+  reexported-modules:
+    Nix.Compile.Value
+    , Nix.Compile.Primops
+    , Nix.Compile.Builtins
+  build-depends:
+      base >= 4.12 && < 5
+    , hnix:hnix-types
+    , hnix:hnix-compile-runtime
+    , hnix
+    , bytestring >= 0.10
+    , crypton >= 0.31
+    , data-fix
+    , directory >= 1.3
+    , filepath >= 1.4
+    , ghc >= 9.4
+    , ghc-paths
+    , memory >= 0.14
+    , mtl >= 2.2
+    , relude >= 1.0.0
+    , serialise >= 0.2
+    , temporary >= 1.3
+    , text >= 1.2
+    , transformers >= 0.5
+    , deepseq >= 1.4.3
+    , hashable >= 1.2.5
+    , unordered-containers >= 0.2.14
+    , vector >= 0.12
+
+-- | Debug tool for the compile session and runtime loading.
+-- Build with: cabal build hnix-compile-debug -fcompile-debug
+executable hnix-compile-debug
+  import: shared-sublibrary
+  main-is: Main.hs
+  hs-source-dirs: compile/debug
+  build-depends:
+      base >= 4.12 && < 5
+    , hnix:hnix-compile
+    , hnix:hnix-types
+    , directory
+    , filepath
+    , ghc >= 9.4
+    , ghc-paths
+    , relude >= 1.0.0
+  ghc-options:
+    -rtsopts
+  if !flag(compile-debug)
+    buildable: False
+
+-- ═══════════════════════════════════════════════════════════════════════════
 -- MAIN LIBRARY (instantiates all signatures via mixins)
 -- ═══════════════════════════════════════════════════════════════════════════
 
@@ -609,6 +739,8 @@ executable hnix
     Paths_hnix
   build-depends:
       hnix
+    , hnix:hnix-compile
+    , hnix:hnix-compile-runtime
     , hnix:hnix-types
     , aeson
     , aeson-pretty
@@ -633,6 +765,20 @@ test-suite hnix-tests
   type: exitcode-stdio-1.0
   main-is: Main.hs
   other-modules:
+    Compile.BuiltinsArithmeticTests
+    Compile.BuiltinsAttrSetTests
+    Compile.BuiltinsControlFlowTests
+    Compile.BuiltinsListTests
+    Compile.BuiltinsStringTests
+    Compile.BuiltinsTypeTests
+    Compile.EdgeCaseTests
+    Compile.ErrorTests
+    Compile.FloatTests
+    Compile.ImportCacheTests
+    Compile.OperatorTests
+    Compile.PatternFunctionTests
+    Compile.TestCommon
+    CompileTests
     EvalTests
     InternedValueTests
     NixLanguageTests
@@ -645,10 +791,14 @@ test-suite hnix-tests
     tests
   build-depends:
       hnix
+    , hnix:hnix-compile
+    , hnix:hnix-compile-runtime
+    , hnix:hnix-types
     , Diff
     , Glob
     , containers
     , directory
+    , filepath
     , hedgehog
     , megaparsec
     , neat-interpolation
@@ -660,7 +810,9 @@ test-suite hnix-tests
     , tasty-hedgehog
     , tasty-hunit
     , tasty-th
+    , temporary
     , unix-compat
+    , vector
 
 -- benchmark hnix-benchmarks
 

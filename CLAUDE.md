@@ -733,6 +733,23 @@ lookup, insert, union, mapWithKey, etc.
 
 The signature modules export the same API as HashMap/Vector, so migration is mostly mechanical renaming.
 
+## GHC Core Compilation Backend
+
+HNix includes an experimental compiler that translates Nix expressions to GHC Core for evaluation via the GHC API. Key files are in `compile/` (Driver.hs, Refs.hs, Expr.hs) and `compile-runtime/` (Value.hs, Primops.hs, Builtins.hs).
+
+### Critical: Module Import Requirements
+
+For `loadRuntimeRefs` in Refs.hs to find identifiers, each module **must be imported** via `setContext` in Driver.hs's `initSession`. This is a common source of "hnix-compile-runtime not available" errors.
+
+**The trap:** `findModuleIO` succeeds (module exists in package DB), but `lookupType` returns `Nothing` because the interface file was never loaded.
+
+**When adding new runtime modules:**
+1. Add the module to `hnix-compile-runtime` in `hnix.cabal`
+2. Add lookups in `compile/Nix/Compile/Refs.hs`
+3. **Add the module to `runtimeImports` in `compile/Nix/Compile/Driver.hs`** ← Easy to forget!
+
+Use `debugLoadRuntimeRefs` (from `Nix.Compile.Refs`) to diagnose lookup failures.
+
 ## Resources
 
 - [Win for Recursion Schemes](https://newartisans.com/2018/04/win-for-recursion-schemes/) - Essential architectural context

@@ -30,6 +30,7 @@ import qualified Data.Aeson.Key                as AK
 import qualified Data.Aeson.KeyMap             as AKM
 import qualified Data.ByteString.Lazy          as LBS
 import           Nix.Options.Parser             ( nixCommandInfo )
+import qualified Nix.Compile.Driver            as Compile
 import           Nix.Standard
 import           Nix.Thunk.Basic
 import           Nix.Value.Monad
@@ -52,6 +53,7 @@ main =
     case cmd of
       LegacyCommand opts -> main' opts
       DerivationCmd dcmd -> runDerivationCommand currentTime dcmd
+      CompileCmd ccmd    -> runCompileCommand ccmd
 
 -- | Handle derivation subcommands
 runDerivationCommand :: UTCTime -> DerivationCommand -> IO ()
@@ -109,6 +111,38 @@ runDerivationCommand currentTime = \case
    where
     -- Configure aeson-pretty to match Nix's output format (2-space indentation)
     prettyConfig = A.defConfig { A.confIndent = A.Spaces 2 }
+
+-- | Handle compile subcommands
+runCompileCommand :: CompileCommand -> IO ()
+runCompileCommand = \case
+  CompileEval CompileEvalOpts{..} -> do
+    eSession <- Compile.initSession
+    case eSession of
+      Left err -> do
+        hPutStrLn stderr $ "Failed to initialize GHC session: " <> show err
+        exitFailure
+      Right session -> do
+        result <- case (cmpEvalExpr, cmpEvalPaths) of
+          (Just expr, []) -> Compile.evalNixText session expr
+          (Nothing, [path]) -> Compile.evalNixFile session path
+          (Nothing, []) -> do
+            hPutStrLn stderr "Error: No expression or file specified"
+            hPutStrLn stderr "Usage: hnix compile eval --expr EXPR | FILE"
+            exitFailure
+          (Just _, _:_) -> do
+            hPutStrLn stderr "Error: Cannot specify both --expr and files"
+            exitFailure
+          (Nothing, _:_:_) -> do
+            hPutStrLn stderr "Error: Only one file can be evaluated at a time"
+            exitFailure
+
+        case result of
+          Left err -> do
+            hPutStrLn stderr $ "Compilation error: " <> show err
+            exitFailure
+          Right val -> print val
+
+        Compile.closeSession session
 
 -- | Evaluate an expression and extract its drvPath
 evalExprToDrvPath

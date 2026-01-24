@@ -3,6 +3,8 @@
 -- | Definitions & defaults for the CLI options
 module Nix.Options
   ( Command(..)
+  , CompileCommand(..)
+  , CompileEvalOpts(..)
   , DerivationCommand(..)
   , DerivationShowOpts(..)
   , Options(..)
@@ -19,6 +21,7 @@ import           Data.Time
 data Command
   = LegacyCommand Options        -- ^ Legacy flag-based CLI
   | DerivationCmd DerivationCommand  -- ^ `hnix derivation <subcommand>`
+  | CompileCmd CompileCommand    -- ^ `hnix compile <subcommand>`
   deriving Show
 
 -- | Derivation subcommands
@@ -32,6 +35,18 @@ data DerivationShowOpts = DerivationShowOpts
   , drvShowRecursive :: Bool         -- ^ Include dependencies (-r/--recursive)
   , drvShowPretty    :: Maybe Bool   -- ^ Pretty print JSON (Nothing = auto based on terminal)
   , drvShowExpr      :: Maybe Text   -- ^ Expression to evaluate (--expr)
+  }
+  deriving Show
+
+-- | Compile subcommands
+data CompileCommand
+  = CompileEval CompileEvalOpts  -- ^ `hnix compile eval`
+  deriving Show
+
+-- | Options for `compile eval`
+data CompileEvalOpts = CompileEvalOpts
+  { cmpEvalExpr  :: Maybe Text   -- ^ Expression to evaluate (--expr)
+  , cmpEvalPaths :: [Path]       -- ^ File paths (positional)
   }
   deriving Show
 

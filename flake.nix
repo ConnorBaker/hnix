@@ -55,8 +55,27 @@
                   ];
                   withHoogle = false;
                   # Point to source data directory for development
-                  shellHook = ''
+                  shellHook = let
+                    # Get the Nix-built hnix packages for the GHC API.
+                    # These are used by Nix.Compile.Driver.initSession to find runtime types.
+                    typesPkg = final.hnix.hsPkgs.hnix.components.sublibs.hnix-types;
+                    runtimePkg = final.hnix.hsPkgs.hnix.components.sublibs.hnix-compile-runtime;
+                  in ''
                     export NIX_DATA_DIR="$PWD/data"
+                    # NIX_GHC_LIBDIR: Override ghc-paths library directory at runtime.
+                    # The ghc-paths package is compiled with a hard-coded path, but at runtime
+                    # we need the GHC from the shell environment (ghc-shell-for-packages-...-env)
+                    # which includes all project dependencies in its global package DB.
+                    # We use $(ghc --print-libdir) to get the correct path dynamically.
+                    export NIX_GHC_LIBDIR="$(ghc --print-libdir)"
+                    # HNIX_PACKAGE_DBS: Only used when no .ghc.environment.* file exists.
+                    #
+                    # With 'cabal build --write-ghc-environment-files=always', the environment
+                    # file contains Cabal-built packages, and HNIX_PACKAGE_DBS is ignored to
+                    # avoid duplicate module errors (FoundMultiple).
+                    #
+                    # This variable is for pure Nix builds where no environment file exists.
+                    export HNIX_PACKAGE_DBS="${typesPkg}/package.conf.d:${runtimePkg}/package.conf.d"
                   '';
                 };
                 modules = [{
@@ -83,9 +102,14 @@
               };
           })
         ];
+        # Extract sublibraries for use with GHC API
+        hnixTypes = pkgs.hnix.hsPkgs.hnix.components.sublibs.hnix-types;
+        hnixCompileRuntime = pkgs.hnix.hsPkgs.hnix.components.sublibs.hnix-compile-runtime;
       in flake // {
         legacyPackages = pkgs;
         packages.default = flake.packages."hnix:exe:hnix";
+        packages.hnix-types = hnixTypes;
+        packages.hnix-compile-runtime = hnixCompileRuntime;
       });
 }
 

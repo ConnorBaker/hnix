@@ -1,0 +1,20 @@
+# Need to add to RuntimeRefs record (after refRuntimeVariadicCon):
+    -- * VarName type (from hnix-types)
+  , refVarNameTyCon :: !TyCon
+  , refVarNameType :: !Type
+
+    -- * Path conversion
+  , refStringToPathId :: !Id
+
+# Need to add to loadRuntimeRefs (after runtimeVariadicCon loading):
+  -- Load VarName type (from hnix-types)
+  varNameTyCon <- MaybeT $ lookupTyCon hsc (mkModuleName "Nix.Types.VarName") (mkTcOcc "VarName")
+  let varNameTy = mkTyConTy varNameTyCon
+  
+  -- Load path conversion
+  stringToPathId <- MaybeT $ lookupId hsc primopsModuleName (mkVarOcc "stringToPath")
+
+# Need to add to RuntimeRefs record assignment (after refRuntimeVariadicCon):
+    , refVarNameTyCon = varNameTyCon
+    , refVarNameType = varNameTy
+    , refStringToPathId = stringToPathId

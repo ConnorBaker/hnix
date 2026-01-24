@@ -12,6 +12,7 @@ import           Data.List (isSuffixOf)
 import           Nix.Scope (attrSetLookup)
 import qualified Data.String as String
 import           Data.Time
+import qualified CompileTests
 import qualified EvalTests
 import qualified InternedValueTests
 import           NeatInterpolation (text)
@@ -105,6 +106,7 @@ main = do
 
   defaultMain $ testGroup "hnix" $
     [ ParserTests.tests
+    , CompileTests.tests
     , EvalTests.tests
     , PrettyTests.tests
     , ReduceExprTests.tests
